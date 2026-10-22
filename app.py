@@ -17,7 +17,7 @@ from google import genai
 NUMERO_NEQUI_WHATSAPP = "3108137030"
 WHATSAPP_INTL = f"57{NUMERO_NEQUI_WHATSAPP}"
 URL_PSE_NEQUI = "https://recarga.nequi.com.co/"
-CLAVE_MAESTRA_ADMIN = "OMAR2026"  # Clave privada para tu generador de licencias
+CLAVE_MAESTRA_ADMIN = "OMAR2026"
 LIMITE_PREGUNTAS_GRATIS = 2
 
 # ==========================================
@@ -198,7 +198,7 @@ class PerfilManual:
 
 
 # ==========================================
-# INICIALIZACIÓN DE ESTADO (100% VACÍO / LIMPIO)
+# INICIALIZACIÓN DE ESTADO (LIMPIO, SIN MANUALES POR DEFECTO)
 # ==========================================
 if "perfiles" not in st.session_state:
   st.session_state.perfiles = {}
@@ -226,10 +226,6 @@ if "examen_t0" not in st.session_state:
   st.session_state.examen_t0 = 0.0
 
 MODELOS_GEMINI = ["gemini-2.5-flash", "gemini-2.5-pro"]
-
-# ==========================================
-# SISTEMA DE LICENCIAS TEMPORALES
-# ==========================================
 
 
 def generar_licencia_temporal(cedula: str, diasVigencia: int) -> str:
@@ -264,11 +260,6 @@ def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
     return False, "Fecha de licencia corrupta."
 
 
-# ==========================================
-# FUNCIONES DE IA Y EXTRACCIÓN DE MANUALES
-# ==========================================
-
-
 def llamar_gemini(client, prompt: str) -> Optional[str]:
   if not client:
     return None
@@ -281,7 +272,7 @@ def llamar_gemini(client, prompt: str) -> Optional[str]:
       except Exception as e:
         msg = str(e).lower()
         if "429" in msg or "quota" in msg or "resource_exhausted" in msg:
-          st.warning("⚠️ Límite de velocidad superado. Espera unos segundos y reintenta.")
+          st.warning("⚠️ Límite de velocidad superado. Espera 15 segundos.")
           return None
         if intento == 0:
           time.sleep(1.2)
@@ -310,19 +301,19 @@ def extraer_pdf(nombre: str, datos: bytes) -> Tuple[str, List[Pagina]]:
 def analizar_manual_universal(client, nombre_archivo: str, texto: str) -> Optional[PerfilManual]:
   muestra = texto[:28000]
   prompt = f"""
-  Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, DIAN, Contraloría, Alcaldías, Gobernaciones, Entidades Nacionales).
-  Analiza el siguiente Manual de Funciones y extrae su estructura con total fidelidad:
+  Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, DIAN, Contraloría, Alcaldías, Gobernaciones).
+  Analiza el siguiente Manual de Funciones y extrae su estructura:
   {muestra}
 
-  DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin bloques markdown):
+  DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin markdown):
   {{
     "entidad": "Nombre de la entidad pública",
     "cargo": "Denominación exacta del empleo",
-    "codigo_grado": "Código, Grado y Ficha si aparece",
-    "nivel": "Nivel jerárquico y dependencia",
+    "codigo_grado": "Código, Grado y Ficha",
+    "nivel": "Nivel jerárquico",
     "proposito": "Propósito principal del empleo",
-    "funciones_esenciales": ["Función 1...", "Función 2...", "Función 3..."],
-    "conocimientos_ejes": ["Eje temático o conocimiento básico 1...", "Conocimiento 2..."],
+    "funciones_esenciales": ["Función 1...", "Función 2..."],
+    "conocimientos_ejes": ["Eje temático 1...", "Conocimiento 2..."],
     "competencias_funcionales": ["Competencia funcional 1..."],
     "competencias_comportamentales": ["Competencia comportamental 1..."],
     "requisitos": "Requisitos de estudio y experiencia"
@@ -389,7 +380,7 @@ def generar_pregunta_por_eje(
 
   texto_manual = st.session_state.manuales_texto.get(perfil.nombre_archivo, perfil.proposito)[:8000]
 
-  prompt = f"""Actúa como experto constructor de pruebas escritas de Juicio Situacional para concursos públicos en Colombia (CNSC, DIAN, Contraloría).
+  prompt = f"""Actúa como experto constructor de pruebas de Juicio Situacional para concursos públicos en Colombia (CNSC).
 ENTIDAD: {perfil.entidad}
 CARGO: {perfil.cargo} ({perfil.codigo_grado})
 PROPÓSITO: {perfil.proposito}
@@ -399,7 +390,7 @@ DIFICULTAD: {dificultad}
 MANUAL DE REFERENCIA:
 {texto_manual}
 
-Crea un caso situacional realista con 4 opciones (A, B, C, D) donde solo una sea correcta y justificada.
+Crea un caso situacional realista con 4 opciones (A, B, C, D) donde solo una sea correcta.
 DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin markdown):
 {{"eje_evaluado":"{foco_evaluacion[:90]}","pregunta":"...","opciones":{{"A":"...","B":"...","C":"...","D":"..."}},"correcta":"A","explicacion":"...","tip_estrategico":"...","fuente":"{perfil.nombre_archivo}","fragmento_soporte":"..."}}"""
 
@@ -484,14 +475,14 @@ if archivos_up:
 nombres_manuales = list(st.session_state.perfiles.keys())
 
 if not nombres_manuales:
-  st.sidebar.warning("⚠️ Sube un Manual de Funciones (PDF) para comenzar.")
+  st.sidebar.error("⚠️ No hay manuales cargados. Sube un PDF para comenzar.")
   perfil_activo = PerfilManual(
       nombre_archivo="ninguno",
       entidad="Esperando documento...",
-      cargo="Sube tu Manual de Funciones",
+      cargo="Sube tu Manual de Funciones en PDF",
       codigo_grado="N/A",
       nivel="Sin perfil activo",
-      proposito="Por favor, usa el botón de carga superior para subir el manual o ficha OPEC del concurso al que te postulas.",
+      proposito="Por favor, utiliza el botón de carga superior para subir el manual o ficha OPEC del concurso al que te postulas.",
   )
 else:
   manual_activo_key = st.sidebar.selectbox("Selecciona el Cargo:", nombres_manuales)
@@ -827,7 +818,7 @@ with tab_sim:
               )
             else:
               st.markdown(
-                  f'<div class="feedback-err"><h4>❌ Incorrecto (Elegiste {op_sel}, era la {corr})</h4><p>{html.escape(q["explicacion"])}</p></div>',
+                  f'<div class="feedback-err"><h4>❌ Incorrecto (Elegiste {opsel}, era la {corr})</h4><p>{html.escape(q["explicacion"])}</p></div>',
                   unsafe_allow_html=True,
               )
 
