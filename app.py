@@ -33,8 +33,25 @@ def obtener_clave_admin_segura() -> str:
             return str(st.secrets["CLAVE_MAESTRA_ADMIN"]).strip()
     except Exception:
         pass
-    # Respaldo ofuscado en caso de no haber configurado Secrets aún
     return base64.b64decode("T01BUjIwMjY=").decode("utf-8")
+
+
+def recortar_sin_cortar_palabra(texto: str, max_chars: int = 95) -> str:
+    """Recorta textos largos para etiquetas visuales respetando siempre palabras completas."""
+    limpio = re.sub(r"\s+", " ", str(texto or "")).strip()
+    if len(limpio) <= max_chars:
+        return limpio
+    recorte = limpio[:max_chars]
+    if " " in recorte:
+        recorte = recorte.rsplit(" ", 1)[0]
+    return recorte.rstrip(" ,.;:-") + "..."
+
+
+def limpiar_cita_manual(texto: str) -> str:
+    """Limpia numeraciones iniciales y puntos finales para insertar funciones dentro de frases sin cortar palabras."""
+    limpio = re.sub(r"\s+", " ", str(texto or "")).strip()
+    limpio = re.sub(r"^\d+[\.\)\-\s]+", "", limpio).strip()
+    return limpio.rstrip(".")
 
 
 # ==========================================
@@ -156,6 +173,8 @@ st.markdown(
         font-weight: 600;
         margin-right: 6px;
         display: inline-block;
+        white-space: normal;
+        word-break: break-word;
     }
     .dif-badge {
         background: #fef3c7;
@@ -396,7 +415,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
             re.IGNORECASE,
         )
         if m_ent:
-            entidad = re.sub(r"\s+", " ", m_ent.group(1)).strip()
+            entidad = re.sub(r"\s+", " ", m_ent.group(1)).strip().rstrip('."')
 
     # 2. Detectar Cargo, Código, Grado y Ficha
     cargo = ""
@@ -407,6 +426,13 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     )
     if m_gestor:
         cargo = m_gestor.group(1).strip()
+    if not cargo:
+        m_sec_num = re.search(
+            r"\b\d+\.\d+(?:\.\d+)?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ\s]{4,45}?)\s+\d{3,4}\s*-\s*\d{1,2}\b",
+            txt,
+        )
+        if m_sec_num:
+            cargo = m_sec_num.group(1).strip()
     if not cargo:
         m_den = re.search(
             r"Denominaci[óo]n\s+del\s*(?:empleo|cargo)?[:\s\n]+([A-Za-zÁÉÍÓÚáéíóúñÑ\s]{4,60})",
@@ -419,7 +445,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
                 cargo = cand
     if not cargo:
         m_cargos = re.search(
-            r"\b(Profesional\s+Especializado|Profesional\s+Universitario|T[ée]cnico\s+Administrativo|T[ée]cnico\s+Operativo|Auxiliar\s+Administrativo|Secretario\s+Ejecutivo|Auditor\s+Fiscal|Sustanciador|Comisario\s+de\s+Familia|Inspector\s+de\s+Polic[íi]a|Gestor)\b",
+            r"\b(Profesional\s+Especializado|Profesional\s+Universitario|T[ée]cnico\s+Administrativo|T[ée]cnico\s+Operativo|Auxiliar\s+Administrativo|Secretario\s+Ejecutivo|Secretario|Auditor\s+Fiscal|Sustanciador|Comisario\s+de\s+Familia|Inspector\s+de\s+Polic[íi]a|Gestor)\b",
             txt,
             re.IGNORECASE,
         )
@@ -430,13 +456,20 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
 
     m_cod = re.search(r"C[óo]d(?:igo)?(?:[\s:.\n]|empleo)*?(\d{3,4})\b", txt, re.IGNORECASE)
     m_gra = re.search(r"Grado[\s:.\n]*(\d{1,2})\b", txt, re.IGNORECASE)
+    m_par_cg = re.search(r"\b(\d{3,4})\s*-\s*(\d{2})\b", txt)
     m_fic = re.search(r"\b([A-Z]{2}-[A-Z]{2}-\d{3,5}|OPEC\s*[:#]?\s*\d{4,8})\b", txt, re.IGNORECASE)
 
     partes_cod = []
     if m_cod:
         partes_cod.append(f"Cód. {m_cod.group(1)}")
+    elif m_par_cg:
+        partes_cod.append(f"Cód. {m_par_cg.group(1)}")
+
     if m_gra:
         partes_cod.append(f"Grado {m_gra.group(1)}")
+    elif m_par_cg:
+        partes_cod.append(f"Grado {m_par_cg.group(2)}")
+
     if m_fic:
         partes_cod.append(f"Ficha {m_fic.group(1).upper()}")
     codigo_grado = " • ".join(partes_cod) if partes_cod else "Ficha OPEC Oficial"
@@ -452,25 +485,26 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     # 4. Propósito Principal
     proposito = ""
     m_prop = re.search(
-        r"Prop[óo]sito\s+principal[:\s\n]+(.*?)(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones|Contenido\s+funcional)",
+        r"Prop[óo]sito\s+principal[:\s\n]+(.*?)(?:(?:III\.|IV\.)?\s*(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones|Contenido\s+funcional))",
         txt,
         re.IGNORECASE | re.DOTALL,
     )
     if m_prop:
         proposito = re.sub(r"\s+", " ", m_prop.group(1)).strip()
+        proposito = re.sub(r"\s+(?:II|III|IV)\.?$", "", proposito).strip()
     if not proposito or len(proposito) < 20:
         proposito = f"Ejecutar los procesos y procedimientos misionales o administrativos asignados al empleo {cargo} en {entidad}, conforme a la normativa vigente."
 
     # 5. Funciones Esenciales
     funciones = []
     m_fun_sec = re.search(
-        r"(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones\s+esenciales)[:\s\n]+(.*?)(?:Requisitos\s+del\s+empleo|Conocimientos\s+b[áa]sicos|Competencias|Contribuciones\s+individuales)",
+        r"(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones\s+esenciales)[:\s\n]+(.*?)(?:(?:IV\.|V\.|VI\.)?\s*(?:Requisitos\s+del\s+empleo|Conocimientos\s+b[áa]sicos|Competencias|Contribuciones\s+individuales))",
         txt,
         re.IGNORECASE | re.DOTALL,
     )
     if m_fun_sec:
         bloque_f = m_fun_sec.group(1)
-        verbos_pat = r"(?:Realizar|Proferir|Participar|Planificar|Elaborar|Ejecutar|Atender|Adelantar|Apoyar|Verificar|Controlar|Proyectar|Gestionar|Liderar|Responder|Sustanciar|Auditar|Liquidar|Coordinar|Hacer\s+seguimiento| Brindar|Las\s+se[ñn]aladas)"
+        verbos_pat = r"(?:Realizar|Proferir|Participar|Planificar|Elaborar|Ejecutar|Atender|Adelantar|Apoyar|Verificar|Controlar|Proyectar|Gestionar|Liderar|Responder|Sustanciar|Auditar|Liquidar|Coordinar|Radicar|Organizar|Efectuar|Agendar|Hacer\s+seguimiento|Brindar|Las\s+se[ñn]aladas|Las\s+dem[áa]s)"
         hallazgos = re.findall(
             rf"({verbos_pat}[^.\n]+(?:\n(?![0-9]\b)[^.\n]+)*\.)",
             bloque_f,
@@ -523,12 +557,13 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         "Adaptabilidad",
         "Trabajo en Equipo",
         "Orientación al Logro",
+        "Orientación a Resultados",
         "Orientación al Usuario y al Ciudadano",
         "Aprendizaje Continuo",
         "Compromiso con la Organización",
     ]
     for pcomp in patrones_comp:
-        if pcomp.split()[0].upper() in txt_upper:
+        if pcomp.split()[0].upper() in txt_upper and pcomp not in comportamentales:
             comportamentales.append(pcomp)
 
     # 7. Requisitos y NBC limpios
@@ -615,28 +650,30 @@ def detectar_normativa_sectorial(perfil: PerfilManual, foco: str) -> str:
 def generar_pregunta_local_juridica(
     perfil: PerfilManual, foco_evaluacion: str, dificultad: str
 ) -> dict:
-    """Genera preguntas de Juicio Situacional adaptadas a la entidad y función del manual cuando opera en modo autónomo."""
+    """Genera preguntas de Juicio Situacional completas (sin cortar palabras) adaptadas a la entidad y función."""
     st.session_state.semilla_q += 1
     idx_semilla = st.session_state.semilla_q
 
     es_comportamental = "COMPORTAMENTAL" in foco_evaluacion.upper()
-    foco_limpio = re.sub(r"^[^:]+:\s*", "", foco_evaluacion).strip()
-    funcion_apoyo = (
+    foco_limpio = limpiar_cita_manual(re.sub(r"^[^:]+:\s*", "", foco_evaluacion))
+    funcion_raw = (
         perfil.funciones_esenciales[idx_semilla % len(perfil.funciones_esenciales)]
         if perfil.funciones_esenciales
         else perfil.proposito
     )
+    funcion_apoyo = limpiar_cita_manual(funcion_raw)
     norma_sectorial = detectar_normativa_sectorial(perfil, f"{foco_limpio} {funcion_apoyo}")
+    norma_principal = norma_sectorial.split(" • ")[0]
 
     if es_comportamental:
         plantillas = [
             {
                 "norma": "Decreto 815 de 2018 (Competencias Comportamentales), Código de Integridad y Ley 1952 de 2019",
                 "escenario": (
-                    f"En el desempeño del cargo de {perfil.cargo} en {perfil.entidad}, su dependencia enfrenta una alta carga de trabajo para cumplir con la función de: '{funcion_apoyo[:180]}'. "
+                    f"En el desempeño del cargo de {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}, su dependencia enfrenta una alta carga de trabajo para cumplir con la función de «{funcion_apoyo}». "
                     f"Durante la jornada, se actualiza un protocolo oficial del área y dos compañeros manifiestan resistencia al cambio, proponiendo seguir usando el formato anterior derogado."
                 ),
-                "pregunta": f"Para demostrar la competencia comportamental de '{foco_limpio}', junto con Adaptabilidad y Trabajo en Equipo, ¿cuál es la actuación correcta?",
+                "pregunta": f"Para demostrar la competencia comportamental de «{foco_limpio}», junto con Adaptabilidad y Trabajo en Equipo, ¿cuál es la actuación correcta?",
                 "correcta_txt": (
                     f"Socializar de manera asertiva con el equipo las ventajas y obligatoriedad del nuevo lineamiento vigente en {perfil.entidad}, apoyar la transición técnica y asegurar la validez de los trámites."
                 ),
@@ -646,17 +683,17 @@ def generar_pregunta_local_juridica(
                     "Suspender la atención a los usuarios y el trámite de los expedientes hasta que otra dependencia resuelva la inconformidad.",
                 ],
                 "explicacion": (
-                    f"El Decreto 815 de 2018 y el Código de Integridad del Servicio Público exigen que los servidores del {perfil.nivel} actúen con '{foco_limpio}', Adaptabilidad y Trabajo en Equipo, orientando sus actuaciones al cumplimiento de los procedimientos vigentes de {perfil.entidad} sin paralizar el servicio ni tolerar prácticas irregulares."
+                    f"El Decreto 815 de 2018 y el Código de Integridad del Servicio Público exigen que los servidores del {perfil.nivel} actúen con «{foco_limpio}», Adaptabilidad y Trabajo en Equipo, orientando sus actuaciones al cumplimiento de los procedimientos vigentes de {perfil.entidad} sin paralizar el servicio ni tolerar prácticas irregulares."
                 ),
                 "tip": "En casos de Juicio Situacional comportamental, elige siempre la opción que combine asertividad, colaboración activa y apego estricto al procedimiento vigente.",
             },
             {
                 "norma": "Código de Integridad del Servicio Público, Orientación al Ciudadano y Decreto 815 de 2018",
                 "escenario": (
-                    f"Usted ejerce como {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. Mientras adelanta trámites relacionados con '{funcion_apoyo[:170]}', "
+                    f"Usted ejerce como {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. Mientras adelanta trámites relacionados con «{funcion_apoyo}», "
                     f"un ciudadano o usuario interno se acerca exaltado exigiendo que su solicitud sea resuelta de inmediato saltándose el turno legal y los controles de verificación."
                 ),
-                "pregunta": f"En coherencia con la competencia comportamental de '{foco_limpio}' y los valores del servicio público, ¿cómo debe proceder?",
+                "pregunta": f"En coherencia con la competencia comportamental de «{foco_limpio}» y los valores del servicio público, ¿cómo debe proceder?",
                 "correcta_txt": (
                     "Mantener un trato respetuoso y escucha activa, explicarle con claridad pedagógica las etapas, requisitos y términos legales del procedimiento, garantizando igualdad y transparencia en el trámite."
                 ),
@@ -666,7 +703,7 @@ def generar_pregunta_local_juridica(
                     "Retirarse del puesto de trabajo sin brindarle información y dejar que otro funcionario asuma la situación.",
                 ],
                 "explicacion": (
-                    f"La competencia comportamental '{foco_limpio}' y los valores de Respeto, Honestidad y Diligencia del Código de Integridad obligan al servidor de {perfil.entidad} a brindar orientación clara y trato digno al ciudadano, sin ceder a presiones que vulneren el principio de legalidad o el orden legal de los procedimientos."
+                    f"La competencia comportamental «{foco_limpio}» y los valores de Respeto, Honestidad y Diligencia del Código de Integridad obligan al servidor de {perfil.entidad} a brindar orientación clara y trato digno al ciudadano, sin ceder a presiones que vulneren el principio de legalidad o el orden legal de los procedimientos."
                 ),
                 "tip": "Ante usuarios difíciles o presiones externas, la respuesta correcta jamás sacrifica la legalidad ni pierde la compostura: informa con claridad y aplica la norma.",
             },
@@ -674,10 +711,10 @@ def generar_pregunta_local_juridica(
     else:
         plantillas = [
             {
-                "norma": f"Ley 1437 de 2011 (CPACA), Art. 29 Constitución Política y {norma_sectorial[:110]}",
+                "norma": f"Ley 1437 de 2011 (CPACA), Art. 29 Constitución Política y {norma_principal}",
                 "escenario": (
                     f"Usted desempeña el empleo de {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. "
-                    f"En desarrollo del eje o función '{foco_limpio[:190]}', detecta inconsistencias de fondo en los soportes de un expediente. "
+                    f"En desarrollo del eje o función «{foco_limpio}», detecta inconsistencias de fondo en los soportes de un expediente. "
                     f"Un superior le sugiere verbalmente omitir el traslado o requerimiento previo y expedir de inmediato el acto definitivo para cumplir el indicador mensual."
                 ),
                 "pregunta": "¿Cuál es la actuación jurídicamente procedente según el manual de funciones y la normativa aplicable?",
@@ -690,14 +727,14 @@ def generar_pregunta_local_juridica(
                     "Declararse impedido sin causal legal para trasladar la responsabilidad del expediente a otra dependencia.",
                 ],
                 "explicacion": (
-                    f"En el ejercicio de '{foco_limpio}', todo servidor de {perfil.entidad} está sujeto al principio de legalidad y al debido proceso (Art. 29 C.P. y Ley 1437 de 2011 - CPACA). Pretermitir etapas de contradicción o expedir actos sin motivación ni soporte probatorio genera nulidad del acto administrativo y responsabilidad disciplinaria."
+                    f"En el ejercicio de «{foco_limpio}», todo servidor de {perfil.entidad} está sujeto al principio de legalidad y al debido proceso (Art. 29 C.P. y Ley 1437 de 2011 - CPACA). Pretermitir etapas de contradicción o expedir actos sin motivación ni soporte probatorio genera nulidad del acto administrativo y responsabilidad disciplinaria."
                 ),
                 "tip": "En las pruebas escritas de la CNSC, ninguna meta de gestión ni orden verbal justifica saltarse etapas procesales del CPACA o de la norma especial de la entidad.",
             },
             {
                 "norma": "Ley 1755 de 2015 (Derecho de Petición), Ley 1712 de 2014 (Transparencia) y Reserva Legal",
                 "escenario": (
-                    f"Como {perfil.cargo} en {perfil.entidad}, usted participa en actuaciones vinculadas con '{foco_limpio[:185]}'. "
+                    f"Como {perfil.cargo} en {perfil.entidad}, usted participa en actuaciones vinculadas con «{foco_limpio}». "
                     f"Un particular radica un derecho de petición solicitando copia íntegra de informes y soportes del proceso que incluyen datos privados, financieros o sujetos a reserva legal de terceros."
                 ),
                 "pregunta": "De acuerdo con la normativa vigente y sus competencias funcionales, ¿cómo debe gestionar esta solicitud?",
@@ -717,7 +754,7 @@ def generar_pregunta_local_juridica(
             {
                 "norma": "Ley 594 de 2000 (Ley General de Archivo), MIPG y Trazabilidad Administrativa",
                 "escenario": (
-                    f"En su rol de {perfil.cargo} en {perfil.entidad}, al consolidar los soportes e informes derivados de '{foco_limpio[:185]}', "
+                    f"En su rol de {perfil.cargo} en {perfil.entidad}, al consolidar los soportes e informes derivados de «{foco_limpio}», "
                     f"advierte que varios documentos preparatorios y actas de verificación aún no han sido incorporados al expediente oficial antes del cierre del periodo."
                 ),
                 "pregunta": "Desde el marco de Gestión Documental (Ley 594 de 2000) y el Modelo Integrado de Planeación y Gestión (MIPG), ¿qué acción debe ejecutar?",
@@ -735,9 +772,9 @@ def generar_pregunta_local_juridica(
                 "tip": "Los expedientes públicos deben foliarse y conservarse íntegramente desde la etapa de gestión siguiendo las Tablas de Retención Documental (TRD).",
             },
             {
-                "norma": f"Principio de Competencia Funcional y Territorial (Art. 6 y 121 C.P., Art. 21 CPACA) y {norma_sectorial[:90]}",
+                "norma": f"Principio de Competencia Funcional y Territorial (Art. 6 y 121 C.P., Art. 21 CPACA) y {norma_principal}",
                 "escenario": (
-                    f"Como {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}, mientras ejecuta '{foco_limpio[:180]}', "
+                    f"Como {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}, mientras ejecuta «{foco_limpio}», "
                     f"identifica hechos adicionales que requieren una actuación administrativa urgente, pero que por su naturaleza o ubicación pertenecen a la competencia exclusiva de otra dependencia o entidad pública."
                 ),
                 "pregunta": "Con fundamento en los principios constitucionales de la Función Pública y el manual específico de funciones, ¿cómo debe actuar?",
@@ -770,7 +807,7 @@ def generar_pregunta_local_juridica(
 
     enunciado_completo = f"{plantilla['escenario']} {plantilla['pregunta']}"
     return {
-        "eje_evaluado": foco_evaluacion[:90],
+        "eje_evaluado": recortar_sin_cortar_palabra(foco_evaluacion, 105),
         "pregunta": enunciado_completo,
         "opciones": opciones_dict,
         "correcta": letra_correcta,
@@ -1013,6 +1050,7 @@ def generar_pregunta_por_eje(
         foco_evaluacion = f"ENFOQUE ESPECÍFICO: {item_especifico}"
 
     norma_sectorial = detectar_normativa_sectorial(perfil, foco_evaluacion)
+    eje_etiqueta = recortar_sin_cortar_palabra(foco_evaluacion, 105)
 
     if api_key.strip():
         texto_doc = st.session_state.manuales_texto.get(perfil.nombre_archivo, "")
@@ -1037,14 +1075,14 @@ ESTRUCTURA DEL MANUAL DE FUNCIONES:
 
 INSTRUCCIONES DE DISEÑO:
 1. Cruza automáticamente el EJE SELECCIONADO ({foco_evaluacion}) con la legislación colombiana específica aplicable a {perfil.entidad} ({norma_sectorial}).
-2. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental.
+2. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental. No cortes ninguna palabra a la mitad.
 3. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
 4. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
 5. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida citando la norma aplicable a la entidad y por qué se descartan las demás.
 6. En "fragmento_soporte", cita la función, competencia o conocimiento del manual que respalda la pregunta.
 
 DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO:
-{{"eje_evaluado":"{foco_evaluacion[:90]}","pregunta":"...","opciones":{{"A":"...","B":"...","C":"...","D":"..."}},"correcta":"A","explicacion":"...","tip_estrategico":"...","fuente":"{perfil.nombre_archivo}","fragmento_soporte":"..."}}"""
+{{"eje_evaluado":"{eje_etiqueta}","pregunta":"...","opciones":{{"A":"...","B":"...","C":"...","D":"..."}},"correcta":"A","explicacion":"...","tip_estrategico":"...","fuente":"{perfil.nombre_archivo}","fragmento_soporte":"..."}}"""
 
         raw = llamar_gemini_universal(api_key, prompt, imagenes_png=usar_imgs)
         data = limpiar_json_ia(raw) if raw else None
@@ -1053,6 +1091,9 @@ DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO:
             and isinstance(data.get("opciones"), dict)
             and data.get("correcta") in ["A", "B", "C", "D"]
         ):
+            data["eje_evaluado"] = recortar_sin_cortar_palabra(
+                data.get("eje_evaluado", eje_etiqueta), 105
+            )
             data["_id"] = hashlib.md5(str(data.get("pregunta", "")).encode()).hexdigest()
             return data
 
@@ -1275,8 +1316,9 @@ with s2:
     ok_man = bool(nombres_manuales and getattr(perfil_activo, "analizado_por_ia", False))
     cls2 = "step-ok" if ok_man else "step-wait"
     ico2 = "✅" if ok_man else "2️⃣"
+    cargo_paso2 = recortar_sin_cortar_palabra(perfil_activo.cargo, 42)
     st.markdown(
-        f'<div class="step-card {cls2}"><div><b>{ico2} Paso 2: Tu Manual OPEC</b><br><small>{html.escape(perfil_activo.cargo[:35]) if ok_man else "Sube solo tu Manual de Funciones PDF"}</small></div></div>',
+        f'<div class="step-card {cls2}"><div><b>{ico2} Paso 2: Tu Manual OPEC</b><br><small>{html.escape(cargo_paso2) if ok_man else "Sube solo tu Manual de Funciones PDF"}</small></div></div>',
         unsafe_allow_html=True,
     )
 with s3:
