@@ -5,16 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <!-- TÍTULO Y SEO PARA GOOGLE -->
-    <title>Cuaderno Oficial de Méritos IA · Simulador CNSC y Concursos Públicos Colombia</title>
-    <meta name="description" content="Entrena con Inteligencia Artificial para cualquier Concurso de Méritos en Colombia (CNSC, Alcaldías, Gobernaciones, Contralorías, DIAN, SENA, ICBF). Sube el PDF de tu Manual de Funciones (OPEC) y resuelve 5 preguntas gratis de Juicio Situacional.">
-    <meta name="keywords" content="simulador cnsc, juicio situacional cnsc, simulacro concurso de meritos colombia, manual de funciones opec, pruebas escritas cnsc gratis, cuaderno de meritos ia, concurso alcaldias gobernaciones contraloria dian">
+    <title>Cuaderno Oficial de Méritos IA · Simulador CNSC, DIAN y Concursos Públicos Colombia</title>
+    <meta name="description" content="Entrena con Inteligencia Artificial para cualquier Concurso de Méritos en Colombia (CNSC, DIAN, Alcaldías, Gobernaciones, Contralorías, SENA, ICBF, INPEC). Sube el PDF de tu Manual de Funciones (OPEC) y resuelve 5 preguntas gratis de Juicio Situacional.">
+    <meta name="keywords" content="simulador cnsc, juicio situacional cnsc, simulacro dian gestor i, simulacro concurso de meritos colombia, manual de funciones opec, pruebas escritas cnsc gratis, cuaderno de meritos ia, concurso alcaldias gobernaciones contraloria dian">
     <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://oyetoto2017.github.io/simulador-cnsc/">
     <meta name="author" content="Mérito PRO Colombia">
+    <meta name="google-site-verification" content="9qjOH8aeLiP58KDzwOby2xWKnG3b8o9O5cCVUb3jZL4" />
 
     <!-- TARJETA VISUAL PARA WHATSAPP, FACEBOOK Y TELEGRAM (OPEN GRAPH) -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Mérito PRO · Entrenador Oficial CNSC">
-    <meta property="og:title" content="📘 Cuaderno Oficial de Méritos IA · Simulador CNSC (5 Preguntas Gratis)">
+    <meta property="og:title" content="📘 Cuaderno Oficial de Méritos IA · Simulador CNSC y DIAN (5 Preguntas Gratis)">
     <meta property="og:description" content="Sube el PDF del Manual de Funciones de tu OPEC y entrena con casos reales de Juicio Situacional cruzados con la ley colombiana. Válido para todos los concursos.">
     <meta property="og:image" content="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80">
     <meta property="og:image:width" content="1200">
@@ -32,10 +34,11 @@
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      "name": "Cuaderno Oficial de Méritos IA - Simulador CNSC",
+      "name": "Cuaderno Oficial de Méritos IA - Simulador CNSC y DIAN",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web",
-      "description": "Plataforma inteligente de preparación y simulacros de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC) basada en el Manual de Funciones OPEC.",
+      "url": "https://oyetoto2017.github.io/simulador-cnsc/",
+      "description": "Plataforma inteligente de preparación y simulacros de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Entidades Nacionales y Territoriales) basada en el Manual de Funciones OPEC.",
       "offers": {
         "@type": "Offer",
         "price": "14900",
@@ -44,12 +47,17 @@
     }
     </script>
 
-    <!-- REDIRECCIÓN AUTOMÁTICA AL SIMULADOR -->
-    <meta http-equiv="refresh" content="2; url=https://simulador-cnsc.streamlit.app">
+    <!-- REDIRECCIÓN INTELIGENTE: Redirige a usuarios humanos, pero permite a Googlebot indexar todo el texto -->
     <script>
-        setTimeout(function() {
-            window.location.href = "https://simulador-cnsc.streamlit.app";
-        }, 1800);
+        (function() {
+            var ua = navigator.userAgent || "";
+            var esRobotGoogle = /bot|googlebot|crawler|spider|robot|crawling|lighthouse/i.test(ua);
+            if (!esRobotGoogle) {
+                setTimeout(function() {
+                    window.location.href = "https://simulador-cnsc.streamlit.app";
+                }, 2200);
+            }
+        })();
     </script>
 
     <style>
@@ -70,7 +78,7 @@
             border: 3px solid #1e3a8a;
             border-left: 18px solid #1e3a8a;
             border-radius: 18px;
-            max-width: 620px;
+            max-width: 650px;
             padding: 38px 34px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             text-align: center;
@@ -96,7 +104,18 @@
             font-size: 15.5px;
             color: #334155;
             line-height: 1.6;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
+        }
+        .seo-list {
+            text-align: left;
+            font-size: 13.5px;
+            color: #475569;
+            background: #ffffff;
+            padding: 14px 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 22px;
+            line-height: 1.65;
         }
         .btn-cta {
             display: inline-block;
@@ -110,22 +129,24 @@
             box-shadow: 0 8px 20px rgba(22, 163, 74, 0.35);
         }
         .loader {
-            margin-top: 18px;
+            margin-top: 16px;
             font-size: 13px;
             color: #64748b;
             font-weight: 600;
         }
     </style>
- <meta name="google-site-verification" content="9qjOH8aeLiP58KDzwOby2xWKnG3b8o9O5cCVUb3jZL4" />
 </head>
 <body>
     <div class="cuaderno-card">
-        <span class="badge">🇨🇴 PLATAFORMA INTEGRAL • TODOS LOS CONCURSOS CNSC</span>
+        <span class="badge">🇨🇴 PLATAFORMA INTEGRAL • TODOS LOS CONCURSOS CNSC Y DIAN</span>
         <h1>Cuaderno Oficial de Méritos IA</h1>
         <p>
-            Entrena con casos reales de <b>Juicio Situacional</b> generados a partir del <b>Manual de Funciones (OPEC)</b> de tu cargo y cruzados automáticamente con la legislación colombiana.<br><br>
-            🎁 <b>Incluye 5 Preguntas Gratis de Demostración</b>
+            Entrena con casos prácticos de <b>Juicio Situacional</b> generados a partir del <b>Manual de Funciones (OPEC)</b> de tu cargo y cruzados automáticamente con la legislación colombiana vigente.
         </p>
+        <div class="seo-list">
+            <b>✅ Convocatorias compatibles:</b> Concursos CNSC, DIAN (Gestor, Facilitador, Analista, Inspector), Alcaldías, Gobernaciones, Contralorías, Personerías, SENA, ICBF, INPEC y Entidades del Orden Nacional y Territorial.<br>
+            <b>🎁 Prueba Gratuita:</b> Incluye 5 preguntas interactivas de demostración con justificación jurídica (CPACA, Constitución Política, MIPG, Gestión Documental y Competencias Comportamentales).
+        </div>
         <a href="https://simulador-cnsc.streamlit.app" class="btn-cta">
             🚀 Entrar al Simulador Ahora
         </a>
