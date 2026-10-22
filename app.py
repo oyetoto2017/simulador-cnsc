@@ -6,6 +6,7 @@ import json
 import os
 import random
 import re
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -347,7 +348,15 @@ if "examen_res" not in st.session_state:
 if "examen_t0" not in st.session_state:
     st.session_state.examen_t0 = 0.0
 if "semilla_q" not in st.session_state:
-    st.session_state.semilla_q = 0
+    st.session_state.semilla_q = random.randint(1, 1000)
+if "items_usados" not in st.session_state:
+    st.session_state.items_usados = set()
+if "preguntas_vistas" not in st.session_state:
+    st.session_state.preguntas_vistas = set()
+if "plantillas_orden" not in st.session_state:
+    st.session_state.plantillas_orden = []
+if "serial_salt" not in st.session_state:
+    st.session_state.serial_salt = secrets.token_hex(2).upper()[:3]
 
 MODELOS_GEMINI = [
     "gemini-2.5-flash",
@@ -356,19 +365,20 @@ MODELOS_GEMINI = [
 ]
 
 # ==========================================
-# SISTEMA DE LICENCIAS CRIPTOGRÁFICO (SHA-256)
+# SISTEMA DE LICENCIAS CRIPTOGRÁFICO CON SERIAL ÚNICO (SHA-256)
 # ==========================================
 
 
-def generar_licencia_temporal(cedula: str, diasVigencia: int) -> str:
+def generar_licencia_temporal(cedula: str, diasVigencia: int, folio: str = "") -> str:
     clave_secreta = obtener_clave_admin_segura()
     fecha_vence = (
         datetime.date.today() + datetime.timedelta(days=diasVigencia)
     ).strftime("%Y%m%d")
     limpia = re.sub(r"\D", "", cedula.strip()) or cedula.strip().lower()
-    semilla = f"{limpia}|{fecha_vence}|{clave_secreta}"
+    folio_limpio = re.sub(r"[^A-Z0-9]", "", folio.upper())[:3] or "A01"
+    semilla = f"{limpia}|{fecha_vence}|{folio_limpio}|{clave_secreta}"
     firma = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
-    return f"PRO-{fecha_vence}-{firma}"
+    return f"PRO-{fecha_vence}-{folio_limpio}-{firma}"
 
 
 def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
@@ -378,11 +388,19 @@ def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
     if not limpia or not cod.startswith("PRO-"):
         return False, "Formato de código o documento inválido."
     partes = cod.split("-")
-    if len(partes) != 3:
-        return False, "El código debe tener el formato PRO-AAAAMMDD-XXXXXXXX."
-    _, fecha_str, firma_recibida = partes
-    semilla = f"{limpia}|{fecha_str}|{clave_secreta}"
-    firma_esperada = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
+
+    # Compatibilidad con códigos de 3 partes (anteriores) y de 4 partes (con serial único)
+    if len(partes) == 3:
+        _, fecha_str, firma_recibida = partes
+        semilla = f"{limpia}|{fecha_str}|{clave_secreta}"
+        firma_esperada = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
+    elif len(partes) == 4:
+        _, fecha_str, folio_str, firma_recibida = partes
+        semilla = f"{limpia}|{fecha_str}|{folio_str}|{clave_secreta}"
+        firma_esperada = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
+    else:
+        return False, "Formato de código PRO inválido."
+
     if firma_recibida != firma_esperada:
         return False, "El código no corresponde a este número de cédula."
     try:
@@ -395,12 +413,12 @@ def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
 
 
 # ==========================================
-# EXTRACTOR LOCAL MULTICONCURSO (TODAS LAS ENTIDADES)
+# EXTRACTOR LOCAL MULTICONCURSO PRECISO (TODAS LAS ENTIDADES)
 # ==========================================
 
 
 def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilManual:
-    """Extrae automáticamente la estructura de manuales CNSC, DIAN, Contralorías, Alcaldías, Gobernaciones y Entidades Nacionales."""
+    """Extrae con precisión funciones, ejes y competencias de cualquier manual (CNSC, DIAN, Contralorías, Alcaldías, Gobernaciones, etc.)."""
     txt = texto.replace("\r", "\n")
     txt_upper = txt.upper()
 
@@ -520,51 +538,57 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
                 if len(l_clean) > 30:
                     funciones.append(l_clean)
 
-    # 6. Conocimientos / Competencias Funcionales y Comportamentales
+    # 6. Detección exacta de Conocimientos Básicos, Competencias Funcionales y Comportamentales (Sin falsos positivos)
     conocimientos = []
     funcionales = []
     comportamentales = []
 
-    patrones_conoc = [
-        "Constitución Política: Derechos Fundamentales, Principios y Estructura del Estado",
-        "Procedimiento Administrativo General (Ley 1437 de 2011 - CPACA)",
-        "Modelo Integrado de Planeación y Gestión (MIPG)",
-        "Sistema PQRSF y Políticas Estatales de Servicio al Ciudadano",
-        "Gestión Documental y Archivo (Ley 594 de 2000)",
-        "Código de Buen Gobierno y Código de Integridad",
-        "Principios de la Función Pública y Régimen del Servidor Público",
-        "Contratación Estatal (Ley 80 de 1993, Ley 1150 de 2007 y SECOP II)",
-        "Control Fiscal, Responsabilidad Fiscal (Ley 610 de 2000 y Decreto Ley 403 de 2020)",
-        "Presupuesto Público, Hacienda Pública y Estatuto Orgánico de Presupuesto",
-        "Código General Disciplinario (Ley 1952 de 2019 y Ley 2094 de 2021)",
-        "Conceptos de Evasión, Elusión, Contrabando y Ley de Transparencia",
-        "Generalidades del Sistema Tributario, Aduanero y Cambiario",
-        "Determinación y Control Tributario",
-        "Régimen Cambiario y Fiscalización Aduanera / Internacional",
-        "Herramientas Informáticas y Ofimáticas",
+    reglas_conocimientos = [
+        (["CONSTITUCIÓN POLÍTICA", "CONSTITUCION POLITICA", "DERECHOS FUNDAMENTALES"], "Constitución Política: Derechos Fundamentales, Principios y Estructura del Estado"),
+        (["1437", "PROCEDIMIENTO ADMINISTRATIVO", "CPACA"], "Procedimiento Administrativo General (Ley 1437 de 2011 - CPACA)"),
+        (["PLANEACIÓN Y GESTIÓN", "PLANEACION Y GESTION", "MIPG", "SISTEMA INTEGRADO DE GESTIÓN"], "Modelo Integrado de Planeación y Gestión (MIPG) y Sistema Integrado de Gestión"),
+        (["PQRSF", "SERVICIO AL CIUDADANO", "ATENCIÓN AL CIUDADANO", "PETICIONES"], "Sistema PQRSF y Políticas Estatales de Servicio al Ciudadano (Ley 1755 de 2015)"),
+        (["GESTIÓN DOCUMENTAL", "GESTION DOCUMENTAL", "ARCHIVO"], "Gestión Documental y Normatividad de Archivo (Ley 594 de 2000)"),
+        (["BUEN GOBIERNO", "CÓDIGO DE INTEGRIDAD", "CODIGO DE INTEGRIDAD"], "Código de Buen Gobierno y Código de Integridad del Servicio Público"),
+        (["FUNCIÓN PÚBLICA", "FUNCION PUBLICA"], "Principios de la Función Pública y Régimen del Servidor Público"),
+        (["HERRAMIENTAS INFORMÁTICAS", "HERRAMIENTAS OFIMÁTICAS", "OFIMÁTICA", "TÉCNICAS DE OFICINA"], "Herramientas Informáticas, Ofimáticas y Técnicas de Oficina"),
+        (["INVENTARIOS", "CONTROL DEL INVENTARIO", "BIENES Y ELEMENTOS"], "Normatividad en Materia de Inventarios y Administración de Bienes Públicos"),
+        (["ORGANIZACIÓN Y FUNCIONAMIENTO DE LA CONTRALORÍA", "CONTRALORÍA"], "Normas sobre Organización, Funcionamiento y Procesos Misionales de la Contraloría"),
     ]
-    for pc in patrones_conoc:
-        palabras_clave = [w for w in re.findall(r"[A-Za-zÁÉÍÓÚáéíóú]{5,}", pc) if len(w) > 5]
-        if any(w.upper() in txt_upper for w in palabras_clave[:2]):
-            if any(k in pc for k in ["Tributario", "Cambiario", "Evasión", "Fiscal", "Contratación", "Presupuesto"]):
-                funcionales.append(pc)
-            else:
-                conocimientos.append(pc)
+    for triggers, nombre_tema in reglas_conocimientos:
+        if any(t in txt_upper for t in triggers) and nombre_tema not in conocimientos:
+            conocimientos.append(nombre_tema)
 
-    patrones_comp = [
-        "Comportamiento Ético",
-        "Comunicación Efectiva",
-        "Adaptabilidad",
-        "Trabajo en Equipo",
-        "Orientación al Logro",
-        "Orientación a Resultados",
-        "Orientación al Usuario y al Ciudadano",
-        "Aprendizaje Continuo",
-        "Compromiso con la Organización",
+    reglas_funcionales = [
+        (["EVASIÓN", "ELUSIÓN", "CONTRABANDO", "LAVADO DE ACTIVOS"], "Conceptos de Evasión, Elusión, Contrabando, Lavado de Activos y Ley de Transparencia"),
+        (["FISCALIZACIÓN Y LIQUIDACIÓN", "FISCALIZACION Y LIQUIDACION"], "Generalidades e Introducción al Proceso de Fiscalización y Liquidación"),
+        (["SISTEMA TRIBUTARIO", "ADUANERO Y CAMBIARIO"], "Generalidades del Sistema Tributario, Aduanero y Cambiario"),
+        (["CONTROL TRIBUTARIO", "DETERMINACIÓN"], "La Determinación y el Control Tributario"),
+        (["RÉGIMEN CAMBIARIO", "REGIMEN CAMBIARIO", "OPERACIONES DE CAMBIO"], "Régimen Cambiario en las Operaciones de Competencia de la DIAN"),
+        (["FISCALIZACIÓN INTERNACIONAL", "FISCALIZACIÓN ADUANERA"], "Fiscalización Internacional y Fiscalización Aduanera"),
+        (["CONTRATACIÓN ESTATAL", "LEY 80", "SECOP", "LICITACIÓN"], "Contratación Estatal (Ley 80 de 1993, Ley 1150 de 2007 y SECOP II)"),
+        (["CONTROL FISCAL", "RESPONSABILIDAD FISCAL", "LEY 610", "AUDITORÍA FISCAL"], "Control Fiscal y Proceso de Responsabilidad Fiscal (Ley 610 de 2000 y Decreto Ley 403 de 2020)"),
+        (["PRESUPUESTO PÚBLICO", "HACIENDA PÚBLICA", "ESTATUTO ORGÁNICO DE PRESUPUESTO"], "Presupuesto Público, Hacienda Pública y Ejecución Presupuestal"),
+        (["DISCIPLINARIO", "LEY 1952"], "Derecho Disciplinario Aplicado al Servicio Público (Ley 1952 de 2019)"),
     ]
-    for pcomp in patrones_comp:
-        if pcomp.split()[0].upper() in txt_upper and pcomp not in comportamentales:
-            comportamentales.append(pcomp)
+    for triggers, nombre_func in reglas_funcionales:
+        if any(t in txt_upper for t in triggers) and nombre_func not in funcionales:
+            funcionales.append(nombre_func)
+
+    reglas_comportamentales = [
+        (["COMPORTAMIENTO ÉTICO", "COMPORTAMIENTO ETICO"], "Comportamiento Ético"),
+        (["COMUNICACIÓN EFECTIVA", "COMUNICACION EFECTIVA"], "Comunicación Efectiva"),
+        (["ADAPTABILIDAD", "ADAPTACIÓN AL CAMBIO"], "Adaptabilidad y Adaptación al Cambio"),
+        (["TRABAJO EN EQUIPO", "COLABORACIÓN"], "Trabajo en Equipo y Colaboración"),
+        (["ORIENTACIÓN AL LOGRO", "ORIENTACIÓN A RESULTADOS"], "Orientación al Logro y a Resultados"),
+        (["ORIENTACIÓN AL USUARIO", "AL CIUDADANO"], "Orientación al Usuario y al Ciudadano"),
+        (["APRENDIZAJE CONTINUO"], "Aprendizaje Continuo"),
+        (["COMPROMISO CON LA ORGANIZACIÓN"], "Compromiso con la Organización"),
+        (["MANEJO DE LA INFORMACIÓN"], "Manejo de la Información y Relaciones Interpersonales"),
+    ]
+    for triggers, nombre_comp in reglas_comportamentales:
+        if any(t in txt_upper for t in triggers) and nombre_comp not in comportamentales:
+            comportamentales.append(nombre_comp)
 
     # 7. Requisitos y NBC limpios
     requisitos = "Título profesional, técnico o formación según manual de funciones."
@@ -583,6 +607,10 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         )
         if nbcs_limpios:
             requisitos = f"Título profesional en NBC: {', '.join(nbcs_limpios)}. Experiencia: {exp_txt}"
+    elif "DIPLOMA DE BACHILLER" in txt_upper:
+        m_exp = re.search(r"([A-Za-zÁÉÍÓÚáéíóú]+\s*\(\d+\)\s*meses\s+de\s+experiencia[^\n.]*)", txt, re.IGNORECASE)
+        exp_b = m_exp.group(1).strip() if m_exp else "Según manual de funciones."
+        requisitos = f"Formación: Diploma de Bachiller. Experiencia: {exp_b}."
 
     if not funciones:
         funciones = [proposito]
@@ -621,12 +649,30 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
 
 
 # ==========================================
-# MOTOR AUTÓNOMO MULTICONCURSO CON DETECTOR NORMATIVO SECTORIAL
+# MOTOR DE ROTACIÓN SIN REPETICIÓN Y CASOS JURÍDICOS CNSC
 # ==========================================
 
 
+def elegir_item_sin_repetir(categoria_tag: str, lista_items: List[str], proposito_def: str) -> str:
+    """Selecciona aleatoriamente una función o eje del manual garantizando NO repetir hasta agotar todos los ítems."""
+    if not lista_items:
+        return f"{categoria_tag}: {proposito_def}"
+
+    candidatos = [f"{categoria_tag}: {x}" for x in lista_items]
+    disponibles = [c for c in candidatos if c not in st.session_state.items_usados]
+
+    if not disponibles:
+        for c in candidatos:
+            st.session_state.items_usados.discard(c)
+        disponibles = candidatos
+
+    elegido = random.choice(disponibles)
+    st.session_state.items_usados.add(elegido)
+    return elegido
+
+
 def detectar_normativa_sectorial(perfil: PerfilManual, foco: str) -> str:
-    """Identifica la legislación específica aplicable según la entidad (DIAN, Contraloría, Alcaldía, etc.) y la función."""
+    """Identifica la legislación específica aplicable según la entidad y la función."""
     texto_analisis = f"{perfil.entidad} {perfil.proposito} {foco}".upper()
     normas = []
 
@@ -650,7 +696,7 @@ def detectar_normativa_sectorial(perfil: PerfilManual, foco: str) -> str:
 def generar_pregunta_local_juridica(
     perfil: PerfilManual, foco_evaluacion: str, dificultad: str
 ) -> dict:
-    """Genera preguntas de Juicio Situacional completas (sin cortar palabras) adaptadas a la entidad y función."""
+    """Genera casos de Juicio Situacional variados sin repetir plantillas ni funciones."""
     st.session_state.semilla_q += 1
     idx_semilla = st.session_state.semilla_q
 
@@ -706,6 +752,26 @@ def generar_pregunta_local_juridica(
                     f"La competencia comportamental «{foco_limpio}» y los valores de Respeto, Honestidad y Diligencia del Código de Integridad obligan al servidor de {perfil.entidad} a brindar orientación clara y trato digno al ciudadano, sin ceder a presiones que vulneren el principio de legalidad o el orden legal de los procedimientos."
                 ),
                 "tip": "Ante usuarios difíciles o presiones externas, la respuesta correcta jamás sacrifica la legalidad ni pierde la compostura: informa con claridad y aplica la norma.",
+            },
+            {
+                "norma": "Ley 1952 de 2019 (Código General Disciplinario), Conflicto de Intereses y Comportamiento Ético",
+                "escenario": (
+                    f"Desempeñándose como {perfil.cargo} en {perfil.entidad}, le es asignado un trámite vinculado con «{funcion_apoyo}». "
+                    f"Al revisar los documentos, usted advierte que el interesado directo en la actuación es un familiar suyo en segundo grado de consanguinidad."
+                ),
+                "pregunta": f"En aplicación de la competencia de «{foco_limpio}» y el régimen de impedimentos, ¿qué decisión debe tomar de inmediato?",
+                "correcta_txt": (
+                    "Declararse impedido por escrito de manera motivada ante su superior inmediato dentro del término legal (Art. 11 y 12 Ley 1437 de 2011), absteniéndose de intervenir en el trámite hasta que se designe funcionario ad hoc."
+                ),
+                "distractores": [
+                    "Continuar tramitando el expediente en secreto procurando actuar con objetividad para no retrasar los tiempos del área.",
+                    "Entregarle informalmente la carpeta a un compañero de escritorio sin dejar constancia escrita ante el superior jerárquico.",
+                    "Rechazar de plano la solicitud de su familiar para demostrar severidad ante sus compañeros de dependencia.",
+                ],
+                "explicacion": (
+                    f"El artículo 11 del CPACA y el Código General Disciplinario (Ley 1952 de 2019) establecen el deber ineludible de declararse impedido cuando concurra interés particular o parentesco dentro de los grados de ley. La transparencia y «{foco_limpio}» exigen formalizar el impedimento ante el superior."
+                ),
+                "tip": "Siempre que aparezca un familiar, amigo íntimo o interés directo en un trámite, la única opción válida es declararse impedido formalmente ante el superior.",
             },
         ]
     else:
@@ -791,9 +857,77 @@ def generar_pregunta_local_juridica(
                 ),
                 "tip": "Si un caso excede tu competencia funcional o jurisdicción, nunca decidas de fondo sobre lo ajeno ni lo ignores: actúa en lo propio y traslada por el Art. 21 del CPACA.",
             },
+            {
+                "norma": f"Notificación de Actos Administrativos (Art. 67 a 69 Ley 1437 de 2011 - CPACA) y {norma_principal}",
+                "escenario": (
+                    f"Dentro de un procedimiento administrativo en {perfil.entidad} asociado a «{foco_limpio}», se profiere una decisión de carácter particular y concreto que afecta directamente los derechos de un administrado. "
+                    f"Un compañero sugiere publicarla únicamente en la cartelera interna de la oficina sin citar al interesado ni enviarla al correo electrónico autorizado."
+                ),
+                "pregunta": "Para que el acto administrativo sea oponible y produzca efectos legales conforme al CPACA, ¿cuál es el trámite obligatorio?",
+                "correcta_txt": (
+                    "Efectuar la notificación personal al interesado (o por medio electrónico si dio autorización expresa), entregándole copia íntegra del acto e indicándole los recursos que legalmente proceden, las autoridades ante quienes deben interponerse y los plazos para hacerlo."
+                ),
+                "distractores": [
+                    "Fijar únicamente una nota en la puerta de la dependencia dando por ejecutoriado el acto el mismo día de su firma.",
+                    "Ejecutar materialmente la decisión sin notificar al ciudadano, argumentando que los actos de la administración gozan de presunción de legalidad.",
+                    "Comunicar la decisión por llamada telefónica informal omitiendo mencionar los recursos de reposición o apelación.",
+                ],
+                "explicacion": (
+                    f"Según los artículos 67 y 72 de la Ley 1437 de 2011 (CPACA), los actos administrativos de carácter particular que pongan término a una actuación en {perfil.entidad} deben notificarse personalmente (o por aviso en subsidio), señalando los recursos procedentes. Sin este requisito, la decisión no produce efectos legales."
+                ),
+                "tip": "Todo acto administrativo definitivo de carácter particular exige notificación personal (física o electrónica autorizada) e indicación expresa de los recursos de ley.",
+            },
+            {
+                "norma": "Modelo Integrado de Planeación y Gestión (MIPG), Control Interno (Ley 87 de 1993) y Mejora Continua",
+                "escenario": (
+                    f"Al evaluar los indicadores trimestrales de su dependencia en {perfil.entidad} relacionados con «{foco_limpio}», "
+                    f"se evidencia un cuello de botella recurrente que retrasa los tiempos de respuesta frente a los lineamientos institucionales establecidos."
+                ),
+                "pregunta": "Desde el enfoque del Modelo Integrado de Planeación y Gestión (MIPG) y el autocontrol, ¿cuál es la actuación técnica adecuada?",
+                "correcta_txt": (
+                    "Analizar las causas raíz del retraso con datos estadísticos verificables, documentar el plan de mejoramiento preventivo/correctivo dentro de los procedimientos del Sistema de Gestión y hacer seguimiento a los indicadores."
+                ),
+                "distractores": [
+                    "Modificar manualmente las fechas de radicación en el reporte estadístico para aparentar un cumplimiento del 100% ante Planeación.",
+                    "Esperar a que la Oficina de Control Interno o un ente externo imponga un hallazgo de auditoría para empezar a revisar el proceso.",
+                    "Suspender la recepción de nuevas solicitudes ciudadanas durante la última semana de cada mes.",
+                ],
+                "explicacion": (
+                    f"En el marco de la Ley 87 de 1993 y la Séptima Dimensión del MIPG (Control Interno y Línea Estratégica de Defensa), cada servidor de {perfil.entidad} es responsable del autocontrol y la mejora continua en el ejercicio de «{foco_limpio}», debiendo reportar información fidedigna y formular acciones correctivas oportunas."
+                ),
+                "tip": "En preguntas sobre MIPG o Control Interno, recuerda el principio de 'Autocontrol': el propio funcionario detecta, documenta y mejora su proceso con datos reales.",
+            },
+            {
+                "norma": "Ley 1437 de 2011 (Art. 45 Corrección de Errores Formales vs. Revocatoria Directa Art. 93)",
+                "escenario": (
+                    f"En ejercicio del cargo de {perfil.cargo} en {perfil.entidad} y cumpliendo con «{foco_limpio}», usted proyectó un acto administrativo que ya fue firmado. "
+                    f"Antes de su archivo, nota que en un cuadro estadístico del documento hubo un error puramente aritmético y de digitación que no cambia en absoluto el sentido material de la decisión."
+                ),
+                "pregunta": "Conforme al artículo 45 de la Ley 1437 de 2011 (CPACA), ¿qué mecanismo jurídico procede en este caso?",
+                "correcta_txt": (
+                    "Proyectar acto de corrección de errores formales (de oficio o a petición de parte) rectificando el dato aritmético sin alterar el sentido material de la decisión ni revivir términos legales vencidos."
+                ),
+                "distractores": [
+                    "Destruir físicamente el acto original firmado y reemplazarlo sin dejar constancia ni acto administrativo de corrección.",
+                    "Exigirle al ciudadano que demande el acto ante la Jurisdicción de lo Contencioso Administrativo para corregir el número digitado.",
+                    "Aplicar tachones con corrector líquido sobre la resolución original ya numerada y fechada.",
+                ],
+                "explicacion": (
+                    f"El artículo 45 del CPACA faculta a las autoridades de {perfil.entidad} para corregir en cualquier tiempo, de oficio o a petición de parte, los errores simplemente formales (aritméticos, de digitación, de transcripción o de omisión de palabras) mediante acto motivado, siempre que ello no cambie el sentido material de la decisión."
+                ),
+                "tip": "Distingue siempre en el CPACA: los errores aritméticos o de digitación que NO cambian el sentido del fallo se corrigen en cualquier tiempo mediante el Art. 45.",
+            },
         ]
 
-    plantilla = plantillas[idx_semilla % len(plantillas)]
+    # Rotación sin repetición de plantillas
+    if not st.session_state.plantillas_orden or max(st.session_state.plantillas_orden, default=0) >= len(plantillas):
+        indices = list(range(len(plantillas)))
+        random.shuffle(indices)
+        st.session_state.plantillas_orden = indices
+
+    idx_elegido = st.session_state.plantillas_orden.pop(0)
+    plantilla = plantillas[idx_elegido % len(plantillas)]
+
     opciones_textos = [plantilla["correcta_txt"]] + plantilla["distractores"]
     random.shuffle(opciones_textos)
 
@@ -815,7 +949,7 @@ def generar_pregunta_local_juridica(
         "tip_estrategico": plantilla["tip"],
         "fuente": f"{perfil.nombre_archivo} + {plantilla['norma']}",
         "fragmento_soporte": foco_limpio,
-        "_id": hashlib.md5(f"{enunciado_completo}_{idx_semilla}".encode()).hexdigest(),
+        "_id": hashlib.md5(f"{enunciado_completo}_{foco_limpio}_{idx_elegido}".encode()).hexdigest(),
     }
 
 
@@ -859,6 +993,36 @@ def llamar_gemini_universal(
         return None
     st.session_state.ultimo_error_ia = ""
 
+    es_vertex_key = key.startswith("AQ.")
+    errores_vistos = []
+
+    # 1. Intento mediante SDK oficial google-genai (Soporta claves AQ. y AIzaSy)
+    for mod in MODELOS_GEMINI:
+        for v_mode in ([True, False] if es_vertex_key else [False, True]):
+            try:
+                cli = genai.Client(vertexai=v_mode, api_key=key)
+                contenidos = [prompt]
+                if imagenes_png:
+                    for img_b in imagenes_png[:2]:
+                        contenidos.append(
+                            types.Part.from_bytes(data=img_b, mime_type="image/png")
+                        )
+                r = cli.models.generate_content(
+                    model=mod,
+                    contents=contenidos,
+                    config=types.GenerateContentConfig(
+                        temperature=0.45,
+                        response_mime_type="application/json",
+                    ),
+                )
+                if r and r.text:
+                    st.session_state.ultimo_error_ia = ""
+                    return r.text
+            except Exception as e:
+                errores_vistos.append(str(e)[:120])
+                continue
+
+    # 2. Respaldo mediante petición REST directa
     parts_rest = [{"text": prompt}]
     if imagenes_png:
         for img_b in imagenes_png[:2]:
@@ -871,14 +1035,11 @@ def llamar_gemini_universal(
         {
             "contents": [{"role": "user", "parts": parts_rest}],
             "generationConfig": {
-                "temperature": 0.35,
+                "temperature": 0.45,
                 "responseMimeType": "application/json",
             },
         }
     ).encode("utf-8")
-
-    es_vertex_key = key.startswith("AQ.")
-    errores_vistos = []
 
     for mod in MODELOS_GEMINI:
         urls = (
@@ -900,7 +1061,7 @@ def llamar_gemini_universal(
                     headers={"Content-Type": "application/json"},
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=30) as resp:
+                with urllib.request.urlopen(req, timeout=25) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     cands = resp_data.get("candidates", [])
                     if cands:
@@ -909,13 +1070,6 @@ def llamar_gemini_universal(
                         if texto_out:
                             st.session_state.ultimo_error_ia = ""
                             return texto_out
-            except urllib.error.HTTPError as he:
-                try:
-                    err_body = he.read().decode("utf-8", errors="ignore")
-                except Exception:
-                    err_body = str(he)
-                errores_vistos.append(f"HTTP {he.code}: {err_body[:120]}")
-                continue
             except Exception as e:
                 errores_vistos.append(str(e)[:120])
                 continue
@@ -1018,7 +1172,8 @@ def generar_pregunta_por_eje(
     item_especifico: str,
     dificultad: str,
 ) -> dict:
-    if modalidad_eje.startswith("🎲 Aleatoria Integral"):
+    # Selección inteligente SIN REPETIR funciones ni competencias
+    if modalidad_eje.startswith("🎲"):
         categorias = [
             ("FUNCIÓN ESENCIAL DEL CARGO", perfil.funciones_esenciales),
             ("EJE TEMÁTICO / CONOCIMIENTO ESENCIAL", perfil.conocimientos_ejes),
@@ -1028,23 +1183,23 @@ def generar_pregunta_por_eje(
         categorias_validas = [(nombre, lista) for nombre, lista in categorias if lista]
         if categorias_validas:
             cat_nombre, lista_items = random.choice(categorias_validas)
-            foco_evaluacion = f"{cat_nombre}: {random.choice(lista_items)}"
+            foco_evaluacion = elegir_item_sin_repetir(cat_nombre, lista_items, perfil.proposito)
         else:
             foco_evaluacion = f"PROPÓSITO Y FUNCIONES: {perfil.proposito}"
-    elif modalidad_eje.startswith("📋 Solo Funciones"):
-        foco_evaluacion = "FUNCIÓN ESENCIAL: " + (
-            random.choice(perfil.funciones_esenciales) if perfil.funciones_esenciales else perfil.proposito
+    elif modalidad_eje.startswith("📋"):
+        foco_evaluacion = elegir_item_sin_repetir(
+            "FUNCIÓN ESENCIAL", perfil.funciones_esenciales, perfil.proposito
         )
-    elif modalidad_eje.startswith("📘 Solo Ejes Temáticos"):
+    elif modalidad_eje.startswith("📘"):
         combinada = perfil.conocimientos_ejes + perfil.competencias_funcionales
-        foco_evaluacion = "EJE TEMÁTICO / FUNCIONAL: " + (
-            random.choice(combinada) if combinada else perfil.proposito
+        foco_evaluacion = elegir_item_sin_repetir(
+            "EJE TEMÁTICO / FUNCIONAL", combinada, perfil.proposito
         )
-    elif modalidad_eje.startswith("🤝 Solo Competencias Comportamentales"):
-        foco_evaluacion = "COMPETENCIA COMPORTAMENTAL: " + (
-            random.choice(perfil.competencias_comportamentales)
-            if perfil.competencias_comportamentales
-            else "Comportamiento Ético, Adaptabilidad y Trabajo en Equipo"
+    elif modalidad_eje.startswith("🤝"):
+        foco_evaluacion = elegir_item_sin_repetir(
+            "COMPETENCIA COMPORTAMENTAL",
+            perfil.competencias_comportamentales,
+            "Comportamiento Ético, Adaptabilidad y Trabajo en Equipo",
         )
     else:
         foco_evaluacion = f"ENFOQUE ESPECÍFICO: {item_especifico}"
@@ -1069,13 +1224,14 @@ PROPÓSITO PRINCIPAL: {perfil.proposito}
 EJE SELECCIONADO PARA ESTA PREGUNTA: {foco_evaluacion}
 MARCO NORMATIVO APLICABLE A LA ENTIDAD Y FUNCIÓN: {norma_sectorial}
 DIFICULTAD: {dificultad}
+SEMILLA DE VARIACIÓN PARA EVITAR REPETICIONES: {random.randint(1000, 99999)}
 
 ESTRUCTURA DEL MANUAL DE FUNCIONES:
 {texto_contexto}
 
 INSTRUCCIONES DE DISEÑO:
 1. Cruza automáticamente el EJE SELECCIONADO ({foco_evaluacion}) con la legislación colombiana específica aplicable a {perfil.entidad} ({norma_sectorial}).
-2. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental. No cortes ninguna palabra a la mitad.
+2. Crea un CASO SITUACIONAL REALISTA E INÉDITO ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental. No cortes ninguna palabra a la mitad.
 3. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
 4. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
 5. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida citando la norma aplicable a la entidad y por qué se descartan las demás.
@@ -1187,6 +1343,7 @@ if archivos_nuevos:
                 st.session_state.manuales_texto[k_pend],
                 imagenes_png=st.session_state.manuales_imgs.get(k_pend),
             )
+            st.session_state.items_usados = set()
 
 nombres_manuales = list(st.session_state.perfiles.keys())
 
@@ -1208,6 +1365,7 @@ if nombres_manuales:
                     st.session_state.manuales_texto[manual_activo_key],
                     imagenes_png=st.session_state.manuales_imgs.get(manual_activo_key),
                 )
+                st.session_state.items_usados = set()
                 st.rerun()
     with c_b2:
         if st.button("🗑️ Limpiar PDF", use_container_width=True):
@@ -1215,6 +1373,7 @@ if nombres_manuales:
             st.session_state.manuales_texto = {}
             st.session_state.manuales_imgs = {}
             st.session_state.paginas = []
+            st.session_state.items_usados = set()
             if "q_actual" in st.session_state:
                 del st.session_state.q_actual
             st.session_state.uploader_key += 1
@@ -1231,15 +1390,15 @@ else:
         analizado_por_ia=False,
     )
 
-# 3. Modo de Entrenamiento
+# 3. Modo de Entrenamiento Universal + Dinámico
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 3. Modo de Entrenamiento")
 modalidad_eje = st.sidebar.selectbox(
     "¿Sobre qué quieres que te evalúe la IA?",
     [
-        "🎲 Aleatoria Integral (Mezcla Funciones + Ejes + Comportamentales)",
+        "🎲 Aleatoria Integral (Todo tu Manual)",
         "📋 Solo Funciones Esenciales del Cargo",
-        "📘 Solo Ejes Temáticos y Competencias Funcionales",
+        "📘 Solo Ejes Temáticos y Funcionales",
         "🤝 Solo Competencias Comportamentales",
         "🔍 Elegir una Función o Eje Específico...",
     ],
@@ -1254,7 +1413,9 @@ if modalidad_eje.startswith("🔍"):
         + [f"[Comportamental] {x}" for x in perfil_activo.competencias_comportamentales]
     )
     if todos_los_items:
-        item_especifico = st.sidebar.selectbox("Selecciona el ítem exacto:", todos_los_items)
+        item_especifico = st.sidebar.selectbox(
+            "Selecciona el punto exacto de tu manual:", todos_los_items
+        )
 
 dificultad = st.sidebar.select_slider(
     "Nivel de Dificultad",
@@ -1263,7 +1424,7 @@ dificultad = st.sidebar.select_slider(
 )
 cantidad_simulacro = st.sidebar.selectbox("Preguntas por Simulacro", [5, 10, 15, 20], index=0)
 
-# 4. Licencias y Panel Admin Blindado
+# 4. Licencias y Panel Admin Blindado con Seriales Únicos
 st.sidebar.markdown("---")
 with st.sidebar.expander("🔐 Activar mi Código PRO (Clientes)"):
     ced_cli = st.text_input("Tu Número de Cédula:", key="input_ced_cli")
@@ -1285,7 +1446,7 @@ with st.sidebar.expander("🔐 Activar mi Código PRO (Clientes)"):
 with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
     pwd_admin = st.text_input("Contraseña de Administrador:", type="password")
     if pwd_admin and pwd_admin.strip() == obtener_clave_admin_segura():
-        st.markdown("**Generar licencia tras confirmar pago en Nequi:**")
+        st.markdown("**Generar licencia única tras confirmar pago en Nequi:**")
         ced_comprador = st.text_input("Cédula del cliente que pagó:")
         plan_dias = st.selectbox(
             "Plan adquirido:",
@@ -1296,12 +1457,19 @@ with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
             ],
             format_func=lambda x: x[1],
         )
+        if st.button("🎲 Generar Nuevo Serial Único", use_container_width=True):
+            st.session_state.serial_salt = secrets.token_hex(2).upper()[:3]
         if ced_comprador:
-            token_generado = generar_licencia_temporal(ced_comprador, plan_dias[0])
+            folio_unico = hashlib.md5(
+                f"{ced_comprador.strip()}_{st.session_state.serial_salt}".encode()
+            ).hexdigest().upper()[:3]
+            token_generado = generar_licencia_temporal(
+                ced_comprador, plan_dias[0], folio=folio_unico
+            )
             st.code(
                 f"Cédula: {ced_comprador.strip()}\nCódigo PRO: {token_generado}\nVigencia: {plan_dias[0]} días"
             )
-            st.caption("Copia y envíale este código a tu cliente por WhatsApp.")
+            st.caption("Cada código tiene firma única vinculada a la cédula del comprador.")
 
 # ==========================================
 # GUÍA VISUAL DE 3 PASOS + CABECERA EDITORIAL
@@ -1547,10 +1715,10 @@ with tab_sim:
                         "🔒 El modo Simulacro Múltiple Cronometrado es exclusivo para usuarios con Plan Activo ($14.900 / $24.900). En tu prueba gratuita de 5 preguntas utiliza el botón izquierdo de Modo Estudio."
                     )
                 else:
-                    with st.spinner("Generando simulacro aleatorio cruzando tus funciones con la normativa vigente..."):
+                    with st.spinner("Generando simulacro aleatorio sin repeticiones cruzando tus funciones con la normativa vigente..."):
                         lote = []
                         vistos = set()
-                        for _ in range(cantidad_simulacro * 2):
+                        for _ in range(cantidad_simulacro * 3):
                             if len(lote) >= cantidad_simulacro:
                                 break
                             q_cand = generar_pregunta_por_eje(
@@ -1628,7 +1796,7 @@ with tab_sim:
                         st.rerun()
             else:
                 if btn_una:
-                    with st.spinner("Construyendo caso práctico cruzando tu manual con la legislación colombiana..."):
+                    with st.spinner("Construyendo caso práctico inédito cruzando tu manual con la legislación colombiana..."):
                         q_nueva = generar_pregunta_por_eje(
                             api_key_user, perfil_activo, modalidad_eje, item_especifico, dificultad
                         )
@@ -1697,7 +1865,7 @@ with tab_sim:
                             if not lic["activa"] and st.session_state.usos_gratis >= LIMITE_PREGUNTAS_GRATIS:
                                 st.rerun()
                             else:
-                                with st.spinner("Generando siguiente caso práctico..."):
+                                with st.spinner("Generando siguiente caso práctico sin repetir eje..."):
                                     q_sig = generar_pregunta_por_eje(
                                         api_key_user, perfil_activo, modalidad_eje, item_especifico, dificultad
                                     )
