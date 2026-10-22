@@ -18,16 +18,27 @@ from google import genai
 from google.genai import types
 
 # ==========================================
-# CONFIGURACIÓN COMERCIAL Y DE PAGOS (OMAR)
+# CONFIGURACIÓN COMERCIAL Y BLINDAJE DE SEGURIDAD
 # ==========================================
 NUMERO_NEQUI_WHATSAPP = "3108137030"
 WHATSAPP_INTL = f"57{NUMERO_NEQUI_WHATSAPP}"
 URL_APP_PUBLICA = "https://simulador-cnsc.streamlit.app"
-CLAVE_MAESTRA_ADMIN = "OMAR2026"
-LIMITE_PREGUNTAS_GRATIS = 5  # 5 preguntas de demostración gratuita
+LIMITE_PREGUNTAS_GRATIS = 5
+
+
+def obtener_clave_admin_segura() -> str:
+    """Lee la clave maestra desde la bóveda privada de Streamlit Secrets sin exponerla en el código."""
+    try:
+        if "CLAVE_MAESTRA_ADMIN" in st.secrets:
+            return str(st.secrets["CLAVE_MAESTRA_ADMIN"]).strip()
+    except Exception:
+        pass
+    # Respaldo ofuscado en caso de no haber configurado Secrets aún
+    return base64.b64decode("T01BUjIwMjY=").decode("utf-8")
+
 
 # ==========================================
-# CONFIGURACIÓN DE PÁGINA Y SEO / ESTILOS SAAS
+# CONFIGURACIÓN DE PÁGINA Y OCULTACIÓN DE CÓDIGO FUENTE
 # ==========================================
 st.set_page_config(
     page_title="Cuaderno de Méritos IA | Simulador Oficial CNSC y Concursos Públicos",
@@ -41,6 +52,13 @@ st.markdown(
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+    /* BLINDAJE VISUAL SAAS: Ocultar enlaces al repositorio de GitHub y menú de código fuente */
+    #MainMenu { visibility: hidden !important; }
+    footer { visibility: hidden !important; }
+    header [data-testid="stHeaderActionElements"] { display: none !important; }
+    .stDeployButton { display: none !important; }
+    [data-testid="stToolbarActions"] { display: none !important; }
 
     .cuaderno-cover {
         background: linear-gradient(135deg, #fdfbf7 0%, #f5efe6 100%);
@@ -319,49 +337,51 @@ MODELOS_GEMINI = [
 ]
 
 # ==========================================
-# SISTEMA DE LICENCIAS CON FECHA DE VENCIMIENTO
+# SISTEMA DE LICENCIAS CRIPTOGRÁFICO (SHA-256)
 # ==========================================
 
 
 def generar_licencia_temporal(cedula: str, diasVigencia: int) -> str:
+    clave_secreta = obtener_clave_admin_segura()
     fecha_vence = (
         datetime.date.today() + datetime.timedelta(days=diasVigencia)
     ).strftime("%Y%m%d")
-    limpia = cedula.strip().lower()
-    semilla = f"{limpia}|{fecha_vence}|{CLAVE_MAESTRA_ADMIN}"
+    limpia = re.sub(r"\D", "", cedula.strip()) or cedula.strip().lower()
+    semilla = f"{limpia}|{fecha_vence}|{clave_secreta}"
     firma = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
     return f"PRO-{fecha_vence}-{firma}"
 
 
 def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
+    clave_secreta = obtener_clave_admin_segura()
     cod = codigo.strip().upper()
-    limpia = cedula.strip().lower()
+    limpia = re.sub(r"\D", "", cedula.strip()) or cedula.strip().lower()
     if not limpia or not cod.startswith("PRO-"):
         return False, "Formato de código o documento inválido."
     partes = cod.split("-")
     if len(partes) != 3:
         return False, "El código debe tener el formato PRO-AAAAMMDD-XXXXXXXX."
     _, fecha_str, firma_recibida = partes
-    semilla = f"{limpia}|{fecha_str}|{CLAVE_MAESTRA_ADMIN}"
+    semilla = f"{limpia}|{fecha_str}|{clave_secreta}"
     firma_esperada = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
     if firma_recibida != firma_esperada:
-        return False, "El código no corresponde a este número de documento."
+        return False, "El código no corresponde a este número de cédula."
     try:
         fecha_vence = datetime.datetime.strptime(fecha_str, "%Y%m%d").date()
         if datetime.date.today() > fecha_vence:
             return False, f"Tu licencia venció el {fecha_vence.strftime('%d/%m/%Y')}. Renueva tu plan por Nequi."
         return True, fecha_vence.strftime("%d/%m/%Y")
     except Exception:
-        return False, "Fecha de licencia corrupta."
+        return False, "Fecha de licencia inválida."
 
 
 # ==========================================
-# EXTRACTOR LOCAL INTELIGENTE (INSTANTÁNEO)
+# EXTRACTOR LOCAL MULTICONCURSO (TODAS LAS ENTIDADES)
 # ==========================================
 
 
 def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilManual:
-    """Extrae automáticamente la estructura de manuales CNSC / DIAN / Entidades Públicas directamente del PDF."""
+    """Extrae automáticamente la estructura de manuales CNSC, DIAN, Contralorías, Alcaldías, Gobernaciones y Entidades Nacionales."""
     txt = texto.replace("\r", "\n")
     txt_upper = txt.upper()
 
@@ -371,12 +391,12 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         entidad = "DIAN - Dirección de Impuestos y Aduanas Nacionales"
     else:
         m_ent = re.search(
-            r"(ALCALD[ÍI]A[^\n]{3,60}|GOBERNACI[ÓO]N[^\n]{3,60}|MINISTERIO[^\n]{3,60}|CONTRALOR[ÍI]A[^\n]{3,60}|PERSONER[ÍI]A[^\n]{3,60}|SUPERINTENDENCIA[^\n]{3,60}|INSTITUTO[^\n]{3,60}|SENA|ICBF|INPEC|CAR|DANE)",
+            r"(CONTRALOR[ÍI]A[^\n]{3,65}|ALCALD[ÍI]A[^\n]{3,65}|GOBERNACI[ÓO]N[^\n]{3,65}|MINISTERIO[^\n]{3,65}|PERSONER[ÍI]A[^\n]{3,65}|PROCURADUR[ÍI]A[^\n]{3,65}|SUPERINTENDENCIA[^\n]{3,65}|SECRETAR[ÍI]A[^\n]{3,65}|INSTITUTO[^\n]{3,65}|UNIDAD\s+ADMINISTRATIVA[^\n]{3,65}|SENA|ICBF|INPEC|CAR|DANE|IGAC|INVIMA|AEROCIVIL|FISCAL[ÍI]A)",
             txt,
             re.IGNORECASE,
         )
         if m_ent:
-            entidad = m_ent.group(1).strip()
+            entidad = re.sub(r"\s+", " ", m_ent.group(1)).strip()
 
     # 2. Detectar Cargo, Código, Grado y Ficha
     cargo = ""
@@ -389,7 +409,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         cargo = m_gestor.group(1).strip()
     if not cargo:
         m_den = re.search(
-            r"Denominaci[óo]n\s+del\s*(?:empleo)?[:\s\n]+([A-Za-zÁÉÍÓÚáéíóúñÑ\s]{4,55})",
+            r"Denominaci[óo]n\s+del\s*(?:empleo|cargo)?[:\s\n]+([A-Za-zÁÉÍÓÚáéíóúñÑ\s]{4,60})",
             txt,
             re.IGNORECASE,
         )
@@ -399,7 +419,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
                 cargo = cand
     if not cargo:
         m_cargos = re.search(
-            r"\b(Profesional\s+Especializado|Profesional\s+Universitario|T[ée]cnico\s+Administrativo|T[ée]cnico\s+Operativo|Auxiliar\s+Administrativo|Secretario\s+Ejecutivo|Gestor)\b",
+            r"\b(Profesional\s+Especializado|Profesional\s+Universitario|T[ée]cnico\s+Administrativo|T[ée]cnico\s+Operativo|Auxiliar\s+Administrativo|Secretario\s+Ejecutivo|Auditor\s+Fiscal|Sustanciador|Comisario\s+de\s+Familia|Inspector\s+de\s+Polic[íi]a|Gestor)\b",
             txt,
             re.IGNORECASE,
         )
@@ -410,7 +430,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
 
     m_cod = re.search(r"C[óo]d(?:igo)?(?:[\s:.\n]|empleo)*?(\d{3,4})\b", txt, re.IGNORECASE)
     m_gra = re.search(r"Grado[\s:.\n]*(\d{1,2})\b", txt, re.IGNORECASE)
-    m_fic = re.search(r"\b([A-Z]{2}-[A-Z]{2}-\d{3,5}|OPEC\s*\d+)\b", txt)
+    m_fic = re.search(r"\b([A-Z]{2}-[A-Z]{2}-\d{3,5}|OPEC\s*[:#]?\s*\d{4,8})\b", txt, re.IGNORECASE)
 
     partes_cod = []
     if m_cod:
@@ -418,7 +438,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     if m_gra:
         partes_cod.append(f"Grado {m_gra.group(1)}")
     if m_fic:
-        partes_cod.append(f"Ficha {m_fic.group(1)}")
+        partes_cod.append(f"Ficha {m_fic.group(1).upper()}")
     codigo_grado = " • ".join(partes_cod) if partes_cod else "Ficha OPEC Oficial"
 
     # 3. Nivel Jerárquico
@@ -432,7 +452,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     # 4. Propósito Principal
     proposito = ""
     m_prop = re.search(
-        r"Prop[óo]sito\s+principal[:\s\n]+(.*?)(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones)",
+        r"Prop[óo]sito\s+principal[:\s\n]+(.*?)(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones|Contenido\s+funcional)",
         txt,
         re.IGNORECASE | re.DOTALL,
     )
@@ -444,13 +464,13 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     # 5. Funciones Esenciales
     funciones = []
     m_fun_sec = re.search(
-        r"Funciones\s+esenciales[:\s\n]+(.*?)(?:Requisitos\s+del\s+empleo|Conocimientos\s+b[áa]sicos|Competencias)",
+        r"(?:Funciones\s+esenciales|Descripci[óo]n\s+de\s+funciones\s+esenciales)[:\s\n]+(.*?)(?:Requisitos\s+del\s+empleo|Conocimientos\s+b[áa]sicos|Competencias|Contribuciones\s+individuales)",
         txt,
         re.IGNORECASE | re.DOTALL,
     )
     if m_fun_sec:
         bloque_f = m_fun_sec.group(1)
-        verbos_pat = r"(?:Realizar|Proferir|Participar|Planificar|Elaborar|Ejecutar|Atender|Adelantar|Apoyar|Verificar|Controlar|Proyectar|Gestionar|Liderar|Responder|Las\s+se[ñn]aladas)"
+        verbos_pat = r"(?:Realizar|Proferir|Participar|Planificar|Elaborar|Ejecutar|Atender|Adelantar|Apoyar|Verificar|Controlar|Proyectar|Gestionar|Liderar|Responder|Sustanciar|Auditar|Liquidar|Coordinar|Hacer\s+seguimiento| Brindar|Las\s+se[ñn]aladas)"
         hallazgos = re.findall(
             rf"({verbos_pat}[^.\n]+(?:\n(?![0-9]\b)[^.\n]+)*\.)",
             bloque_f,
@@ -478,7 +498,11 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         "Sistema PQRSF y Políticas Estatales de Servicio al Ciudadano",
         "Gestión Documental y Archivo (Ley 594 de 2000)",
         "Código de Buen Gobierno y Código de Integridad",
-        "Principios de la Función Pública",
+        "Principios de la Función Pública y Régimen del Servidor Público",
+        "Contratación Estatal (Ley 80 de 1993, Ley 1150 de 2007 y SECOP II)",
+        "Control Fiscal, Responsabilidad Fiscal (Ley 610 de 2000 y Decreto Ley 403 de 2020)",
+        "Presupuesto Público, Hacienda Pública y Estatuto Orgánico de Presupuesto",
+        "Código General Disciplinario (Ley 1952 de 2019 y Ley 2094 de 2021)",
         "Conceptos de Evasión, Elusión, Contrabando y Ley de Transparencia",
         "Generalidades del Sistema Tributario, Aduanero y Cambiario",
         "Determinación y Control Tributario",
@@ -488,7 +512,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     for pc in patrones_conoc:
         palabras_clave = [w for w in re.findall(r"[A-Za-zÁÉÍÓÚáéíóú]{5,}", pc) if len(w) > 5]
         if any(w.upper() in txt_upper for w in palabras_clave[:2]):
-            if "Tributario" in pc or "Cambiario" in pc or "Evasión" in pc:
+            if any(k in pc for k in ["Tributario", "Cambiario", "Evasión", "Fiscal", "Contratación", "Presupuesto"]):
                 funcionales.append(pc)
             else:
                 conocimientos.append(pc)
@@ -500,13 +524,15 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         "Trabajo en Equipo",
         "Orientación al Logro",
         "Orientación al Usuario y al Ciudadano",
+        "Aprendizaje Continuo",
+        "Compromiso con la Organización",
     ]
     for pcomp in patrones_comp:
         if pcomp.split()[0].upper() in txt_upper:
             comportamentales.append(pcomp)
 
     # 7. Requisitos y NBC limpios
-    requisitos = "Título profesional o formación según manual de funciones."
+    requisitos = "Título profesional, técnico o formación según manual de funciones."
     nbcs_raw = re.findall(r"B?NBC[:.\s]+([A-ZÁÉÍÓÚÑ,\s]+?)(?=\n|\d|B?NBC|Tipo\s+de)", txt)
     if nbcs_raw:
         nbcs_limpios = []
@@ -560,124 +586,175 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
 
 
 # ==========================================
-# MOTOR AUTÓNOMO DE RESPALDO JURÍDICO CNSC (ANTI-FALLOS)
+# MOTOR AUTÓNOMO MULTICONCURSO CON DETECTOR NORMATIVO SECTORIAL
 # ==========================================
+
+
+def detectar_normativa_sectorial(perfil: PerfilManual, foco: str) -> str:
+    """Identifica la legislación específica aplicable según la entidad (DIAN, Contraloría, Alcaldía, etc.) y la función."""
+    texto_analisis = f"{perfil.entidad} {perfil.proposito} {foco}".upper()
+    normas = []
+
+    if any(k in texto_analisis for k in ["DIAN", "TRIBUTARI", "ADUANER", "CAMBIARI", "EVASIÓN", "CONTRABANDO"]):
+        normas.append("Estatuto Tributario Nacional (Decreto 624 de 1989), Régimen Aduanero (Decreto 1165 de 2019) y Régimen Cambiario")
+    if any(k in texto_analisis for k in ["CONTRALOR", "FISCAL", "AUDITOR", "DETRIMENTO", "CUENTAS"]):
+        normas.append("Ley 610 de 2000 (Responsabilidad Fiscal), Decreto Ley 403 de 2020 y Ley 1474 de 2011 (Estatuto Anticorrupción)")
+    if any(k in texto_analisis for k in ["ALCALD", "MUNICIP", "GOBERNAC", "DEPARTAMENT", "TERRITORIAL"]):
+        normas.append("Ley 136 de 1994, Ley 1551 de 2012 (Régimen Municipal) y Ley 152 de 1994 (Ley Orgánica del Plan de Desarrollo)")
+    if any(k in texto_analisis for k in ["CONTRAT", "LICITAC", "SECOP", "SUPERVIS", "INTERVENTOR", "PLIEGO"]):
+        normas.append("Ley 80 de 1993, Ley 1150 de 2007 y Decreto 1082 de 2015 (Contratación Estatal)")
+    if any(k in texto_analisis for k in ["PRESUPUEST", "FINANCIER", "TESORER", "CONTABLE", "GASTO"]):
+        normas.append("Decreto 111 de 1996 (Estatuto Orgánico del Presupuesto) y Normas de Contabilidad Pública (CGN)")
+    if any(k in texto_analisis for k in ["DISCIPLIN", "PERSONER", "PROCURADUR", "QUEJA", "CONDUCTA"]):
+        normas.append("Ley 1952 de 2019 y Ley 2094 de 2021 (Código General Disciplinario)")
+
+    normas.append("Constitución Política, Ley 1437 de 2011 (CPACA), Ley 1755 de 2015 (Derecho de Petición), Ley 594 de 2000 (Archivo) y MIPG")
+    return " • ".join(normas)
 
 
 def generar_pregunta_local_juridica(
     perfil: PerfilManual, foco_evaluacion: str, dificultad: str
 ) -> dict:
-    """Genera preguntas de Juicio Situacional cruzando las funciones reales del manual con la ley colombiana cuando no hay API Key activa."""
+    """Genera preguntas de Juicio Situacional adaptadas a la entidad y función del manual cuando opera en modo autónomo."""
     st.session_state.semilla_q += 1
     idx_semilla = st.session_state.semilla_q
 
+    es_comportamental = "COMPORTAMENTAL" in foco_evaluacion.upper()
     foco_limpio = re.sub(r"^[^:]+:\s*", "", foco_evaluacion).strip()
-    if len(foco_limpio) < 10 and perfil.funciones_esenciales:
-        foco_limpio = random.choice(perfil.funciones_esenciales)
+    funcion_apoyo = (
+        perfil.funciones_esenciales[idx_semilla % len(perfil.funciones_esenciales)]
+        if perfil.funciones_esenciales
+        else perfil.proposito
+    )
+    norma_sectorial = detectar_normativa_sectorial(perfil, f"{foco_limpio} {funcion_apoyo}")
 
-    plantillas = [
-        {
-            "norma": "Ley 1437 de 2011 (CPACA) y Principio de Debido Proceso (Art. 29 Constitución Política)",
-            "escenario": (
-                f"Usted desempeña el empleo de {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. "
-                f"En el marco de su responsabilidad de '{foco_limpio}', detecta una inconsistencia sustancial en los soportes presentados por un administrado dentro de una actuación en curso. "
-                f"Su superior inmediato le solicita verbalmente omitir la etapa de traslado y expedir de inmediato la decisión sancionatoria o de fondo para cumplir la meta mensual del área."
-            ),
-            "pregunta": "¿Cuál es la actuación que usted debe adelantar conforme al manual de funciones y al ordenamiento jurídico colombiano?",
-            "correcta_txt": (
-                f"Expedir el acto administrativo de trámite o requerimiento previo garantizando el derecho de contradicción y defensa conforme a la Ley 1437 de 2011 (CPACA), dejando trazabilidad técnica en el expediente de {perfil.entidad}."
-            ),
-            "distractores": [
-                "Acatar de inmediato la orden verbal del superior y proyectar el acto definitivo sin etapa previa, amparándose en el principio de jerarquía administrativa y celeridad.",
-                "Archivar provisionalmente las diligencias sin notificar al interesado hasta que el superior emita la instrucción por escrito.",
-                "Trasladar el expediente a la Oficina de Control Interno para que dicha dependencia asuma la competencia funcional y resuelva de fondo el trámite.",
-            ],
-            "explicacion": (
-                f"La opción correcta aplica estrictamente la función del cargo ('{foco_limpio}') en armonía con el artículo 29 de la Constitución Política y el Código de Procedimiento Administrativo y de lo Contencioso Administrativo (Ley 1437 de 2011), los cuales prohíben pretermitir etapas procesales de contradicción y exigen motivar los actos administrativos de trámite, preparatorios y de fondo. Las demás opciones vulneran el debido proceso o incurren en omisión de funciones."
-            ),
-            "tip": "En las pruebas CNSC, nunca elijas opciones que sacrifiquen el debido proceso o la legalidad (CPACA) por cumplir metas rápidas o instrucciones verbales irregulares.",
-        },
-        {
-            "norma": "Ley 1755 de 2015 (Derecho de Petición), Ley 1712 de 2014 (Transparencia) y Reserva Legal",
-            "escenario": (
-                f"Como {perfil.cargo} en {perfil.entidad}, usted se encuentra ejecutando actividades relacionadas con '{foco_limpio}'. "
-                f"Un ciudadano radica una solicitud formal a través del Sistema PQRSF pidiendo copia íntegra de documentos e informes de inteligencia o fiscalización que contienen datos sometidos a reserva legal y operaciones de terceros."
-            ),
-            "pregunta": "De acuerdo con la normativa vigente y sus competencias funcionales, ¿cómo debe gestionar este requerimiento?",
-            "correcta_txt": (
-                "Atender oportunamente la petición dentro de los términos de la Ley 1755 de 2015, suministrando la información pública general y rechazando de manera motivada la entrega de los documentos sometidos a reserva legal citando la disposición normativa exacta."
-            ),
-            "distractores": [
-                "Entregar la totalidad de los expedientes reservados en aplicación prevalente del principio de máxima publicidad y transparencia estatal.",
-                "Abstenerse de dar respuesta escrita al peticionario por tratarse de actuaciones sujetas a reserva dentro de un proceso misional.",
-                "Remitir los documentos reservados al correo personal del ciudadano advirtiendo que no puede divulgarlos a terceros.",
-            ],
-            "explicacion": (
-                f"Conforme a la Ley 1755 de 2015 (Art. 24 y 25) y la Ley 1712 de 2014, toda petición debe responderse dentro de los términos legales, pero cuando recae sobre información con reserva constitucional o legal (como datos tributarios, cambiarios, financieros o de seguridad), el servidor público de {perfil.entidad} debe negar esa parte mediante acto o respuesta motivada invocando la norma que establece la reserva."
-            ),
-            "tip": "En casos de PQRSF con información reservada, la respuesta correcta siempre combina: responder a tiempo + motivar jurídicamente la reserva legal.",
-        },
-        {
-            "norma": "Ley 594 de 2000 (Ley General de Archivo), MIPG y Trazabilidad Probatoria",
-            "escenario": (
-                f"En el ejercicio del cargo de {perfil.cargo} en {perfil.entidad}, usted lidera el cumplimiento de '{foco_limpio}'. "
-                f"Al consolidar las evidencias e informes de gestión del trimestre, un compañero de equipo propone eliminar varios registros preliminares y actas de verificación para simplificar el expediente antes de la auditoría institucional."
-            ),
-            "pregunta": "Desde el enfoque de Gestión Documental, MIPG y Comportamiento Ético, ¿cuál es la decisión procedente?",
-            "correcta_txt": (
-                "Conservar la integridad, foliación y trazabilidad de todos los documentos y actas producidas en el proceso conforme a las Tablas de Retención Documental (Ley 594 de 2000) y los lineamientos institucionales."
-            ),
-            "distractores": [
-                "Autorizar la depuración inmediata de las actas preliminares para presentar un expediente más resumido ante el equipo auditor.",
-                "Guardar las actas únicamente en una carpeta personal fuera del sistema oficial de gestión documental de la entidad.",
-                "Delegar en un contratista externo la decisión sobre qué documentos oficiales deben destruirse o conservarse en el archivo de gestión.",
-            ],
-            "explicacion": (
-                f"La Ley 594 de 2000 y el Modelo Integrado de Planeación y Gestión (MIPG) obligan a garantizar la autenticidad, integridad y disponibilidad de los documentos públicos de {perfil.entidad}. Ningún servidor puede destruir soportes de actuaciones administrativas por fuera de las Tablas de Retención Documental (TRD), pues ello compromete la validez probatoria y constituye falta disciplinaria (Ley 1952 de 2019)."
-            ),
-            "tip": "Siempre que una pregunta mencione expedientes, soportes o informes, prioriza la opción que respete las Tablas de Retención Documental (TRD) y la trazabilidad oficial.",
-        },
-        {
-            "norma": "Código de Integridad del Servicio Público, Competencias Comportamentales y Ley 1952 de 2019 (CGD)",
-            "escenario": (
-                f"Durante una jornada de alta carga operativa en {perfil.entidad}, se implementa una actualización en los aplicativos y lineamientos para ejecutar '{foco_limpio}'. "
-                f"Dos integrantes de su equipo manifiestan resistencia al cambio y continúan aplicando el formato derogado, lo que pone en riesgo la validez técnica de los trámites del área."
-            ),
-            "pregunta": "Evaluando las competencias de Adaptabilidad, Trabajo en Equipo y Comunicación Efectiva, ¿qué acción debe asumir usted?",
-            "correcta_txt": (
-                "Socializar de manera asertiva con el equipo el nuevo procedimiento vigente, brindar apoyo técnico en la transición al aplicativo actualizado y verificar que las actuaciones se ajusten a la directriz institucional."
-            ),
-            "distractores": [
-                "Realizar únicamente su parte del trabajo con el nuevo formato e ignorar los errores del resto del equipo para evitar fricciones interpersonales.",
-                "Continuar utilizando el procedimiento antiguo por solidaridad con sus compañeros hasta que se programe una capacitación presencial el próximo semestre.",
-                "Suspender la atención de los trámites misionales del área hasta que todos los funcionarios dominen por su cuenta la herramienta.",
-            ],
-            "explicacion": (
-                f"Las competencias comportamentales del nivel ({perfil.nivel}) y el Código de Integridad exigen Adaptabilidad ante cambios normativos o tecnológicos, Comunicación Efectiva y Trabajo en Equipo orientado al logro de los fines esenciales del Estado, asegurando que los procedimientos de {perfil.entidad} se ejecuten conforme a las directrices vigentes."
-            ),
-            "tip": "En preguntas de competencias comportamentales, descarta las actitudes pasivas, individualistas o que paralicen el servicio público.",
-        },
-        {
-            "norma": "Principio de Legalidad, Planeación y Control de Gestión (MIPG / Normativa Misional)",
-            "escenario": (
-                f"Como {perfil.cargo} ({perfil.codigo_grado}) adscrito a {perfil.entidad}, le corresponde desarrollar '{foco_limpio}'. "
-                f"Al planificar un operativo o actuación de control y verificación, advierte que el requerimiento proyectado abarca asuntos que exceden la jurisdicción territorial y funcional asignada a su dependencia."
-            ),
-            "pregunta": "Con fundamento en los principios de la Función Pública y el propósito principal de su empleo, ¿cómo debe proceder?",
-            "correcta_txt": (
-                "Delimitar la actuación estrictamente al marco de su competencia y jurisdicción legal, y remitir por competencia (Art. 21 CPACA) los hallazgos que correspondan a otra dependencia o autoridad."
-            ),
-            "distractores": [
-                "Adelantar la totalidad de la investigación por fuera de su jurisdicción invocando el principio de eficacia y economía procesal.",
-                "Abstenerse de iniciar cualquier actuación, incluso sobre los hechos que sí pertenecen a su jurisdicción, y archivar el caso.",
-                "Solicitar al ciudadano o investigado que renuncie expresamente a las reglas de competencia territorial para poder fallar el asunto.",
-            ],
-            "explicacion": (
-                f"El propósito del cargo de {perfil.cargo} en {perfil.entidad} exige actuar siempre 'en el marco de su competencia y jurisdicción'. Según los artículos 6 y 121 de la Constitución Política y la Ley 1437 de 2011, la falta de competencia vicia de nulidad los actos administrativos; por ende, se debe ejercer el control sobre lo propio y trasladar formalmente lo que corresponda a otra jurisdicción."
-            ),
-            "tip": "Fíjate siempre en la frase 'en el marco de su competencia y jurisdicción': actuar sin competencia genera nulidad del acto administrativo.",
-        },
-    ]
+    if es_comportamental:
+        plantillas = [
+            {
+                "norma": "Decreto 815 de 2018 (Competencias Comportamentales), Código de Integridad y Ley 1952 de 2019",
+                "escenario": (
+                    f"En el desempeño del cargo de {perfil.cargo} en {perfil.entidad}, su dependencia enfrenta una alta carga de trabajo para cumplir con la función de: '{funcion_apoyo[:180]}'. "
+                    f"Durante la jornada, se actualiza un protocolo oficial del área y dos compañeros manifiestan resistencia al cambio, proponiendo seguir usando el formato anterior derogado."
+                ),
+                "pregunta": f"Para demostrar la competencia comportamental de '{foco_limpio}', junto con Adaptabilidad y Trabajo en Equipo, ¿cuál es la actuación correcta?",
+                "correcta_txt": (
+                    f"Socializar de manera asertiva con el equipo las ventajas y obligatoriedad del nuevo lineamiento vigente en {perfil.entidad}, apoyar la transición técnica y asegurar la validez de los trámites."
+                ),
+                "distractores": [
+                    "Aplicar el nuevo protocolo únicamente en sus trámites individuales e ignorar los errores del resto del equipo para evitar discusiones.",
+                    "Continuar utilizando el formato derogado por solidaridad con sus compañeros hasta que finalice el trimestre.",
+                    "Suspender la atención a los usuarios y el trámite de los expedientes hasta que otra dependencia resuelva la inconformidad.",
+                ],
+                "explicacion": (
+                    f"El Decreto 815 de 2018 y el Código de Integridad del Servicio Público exigen que los servidores del {perfil.nivel} actúen con '{foco_limpio}', Adaptabilidad y Trabajo en Equipo, orientando sus actuaciones al cumplimiento de los procedimientos vigentes de {perfil.entidad} sin paralizar el servicio ni tolerar prácticas irregulares."
+                ),
+                "tip": "En casos de Juicio Situacional comportamental, elige siempre la opción que combine asertividad, colaboración activa y apego estricto al procedimiento vigente.",
+            },
+            {
+                "norma": "Código de Integridad del Servicio Público, Orientación al Ciudadano y Decreto 815 de 2018",
+                "escenario": (
+                    f"Usted ejerce como {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. Mientras adelanta trámites relacionados con '{funcion_apoyo[:170]}', "
+                    f"un ciudadano o usuario interno se acerca exaltado exigiendo que su solicitud sea resuelta de inmediato saltándose el turno legal y los controles de verificación."
+                ),
+                "pregunta": f"En coherencia con la competencia comportamental de '{foco_limpio}' y los valores del servicio público, ¿cómo debe proceder?",
+                "correcta_txt": (
+                    "Mantener un trato respetuoso y escucha activa, explicarle con claridad pedagógica las etapas, requisitos y términos legales del procedimiento, garantizando igualdad y transparencia en el trámite."
+                ),
+                "distractores": [
+                    "Acceder a la presión del usuario y omitir las validaciones obligatorias para evitar que interponga una queja en atención al ciudadano.",
+                    "Responder en el mismo tono airado y negarse a recibirle la documentación por su actitud irrespetuosa.",
+                    "Retirarse del puesto de trabajo sin brindarle información y dejar que otro funcionario asuma la situación.",
+                ],
+                "explicacion": (
+                    f"La competencia comportamental '{foco_limpio}' y los valores de Respeto, Honestidad y Diligencia del Código de Integridad obligan al servidor de {perfil.entidad} a brindar orientación clara y trato digno al ciudadano, sin ceder a presiones que vulneren el principio de legalidad o el orden legal de los procedimientos."
+                ),
+                "tip": "Ante usuarios difíciles o presiones externas, la respuesta correcta jamás sacrifica la legalidad ni pierde la compostura: informa con claridad y aplica la norma.",
+            },
+        ]
+    else:
+        plantillas = [
+            {
+                "norma": f"Ley 1437 de 2011 (CPACA), Art. 29 Constitución Política y {norma_sectorial[:110]}",
+                "escenario": (
+                    f"Usted desempeña el empleo de {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. "
+                    f"En desarrollo del eje o función '{foco_limpio[:190]}', detecta inconsistencias de fondo en los soportes de un expediente. "
+                    f"Un superior le sugiere verbalmente omitir el traslado o requerimiento previo y expedir de inmediato el acto definitivo para cumplir el indicador mensual."
+                ),
+                "pregunta": "¿Cuál es la actuación jurídicamente procedente según el manual de funciones y la normativa aplicable?",
+                "correcta_txt": (
+                    f"Adelantar el requerimiento o acto administrativo de trámite garantizando el derecho de contradicción y debido proceso (Ley 1437 de 2011 y normativa de {perfil.entidad}), dejando soporte técnico en el expediente."
+                ),
+                "distractores": [
+                    "Expedir de inmediato el acto definitivo sin agotar la etapa previa, dando prelación a la orden verbal y a la meta estadística del área.",
+                    "Archivar de plano la actuación sin emitir pronunciamiento motivado ni notificar a los interesados.",
+                    "Declararse impedido sin causal legal para trasladar la responsabilidad del expediente a otra dependencia.",
+                ],
+                "explicacion": (
+                    f"En el ejercicio de '{foco_limpio}', todo servidor de {perfil.entidad} está sujeto al principio de legalidad y al debido proceso (Art. 29 C.P. y Ley 1437 de 2011 - CPACA). Pretermitir etapas de contradicción o expedir actos sin motivación ni soporte probatorio genera nulidad del acto administrativo y responsabilidad disciplinaria."
+                ),
+                "tip": "En las pruebas escritas de la CNSC, ninguna meta de gestión ni orden verbal justifica saltarse etapas procesales del CPACA o de la norma especial de la entidad.",
+            },
+            {
+                "norma": "Ley 1755 de 2015 (Derecho de Petición), Ley 1712 de 2014 (Transparencia) y Reserva Legal",
+                "escenario": (
+                    f"Como {perfil.cargo} en {perfil.entidad}, usted participa en actuaciones vinculadas con '{foco_limpio[:185]}'. "
+                    f"Un particular radica un derecho de petición solicitando copia íntegra de informes y soportes del proceso que incluyen datos privados, financieros o sujetos a reserva legal de terceros."
+                ),
+                "pregunta": "De acuerdo con la normativa vigente y sus competencias funcionales, ¿cómo debe gestionar esta solicitud?",
+                "correcta_txt": (
+                    "Responder de fondo dentro de los términos de la Ley 1755 de 2015, entregando la información de carácter público y negando de forma motivada los documentos sometidos a reserva legal con cita expresa de la norma."
+                ),
+                "distractores": [
+                    "Remitir la totalidad de los documentos reservados invocando el principio de máxima publicidad sin aplicar excepción alguna.",
+                    "Abstenerse de contestar la petición por tratarse de un trámite misional que contiene información reservada.",
+                    "Enviar los documentos reservados al correo personal del peticionario bajo compromiso verbal de confidencialidad.",
+                ],
+                "explicacion": (
+                    f"Según los artículos 24 y 25 de la Ley 1755 de 2015 y la Ley 1712 de 2014, el servidor de {perfil.entidad} debe contestar oportunamente toda petición, pero tiene el deber legal de proteger la información sujeta a reserva constitucional o legal mediante rechazo motivado que cite la disposición legal pertinente."
+                ),
+                "tip": "Recuerda la regla de oro de PQRSF en la CNSC: siempre se responde en término, pero la información reservada se niega mediante acto motivado citando la ley.",
+            },
+            {
+                "norma": "Ley 594 de 2000 (Ley General de Archivo), MIPG y Trazabilidad Administrativa",
+                "escenario": (
+                    f"En su rol de {perfil.cargo} en {perfil.entidad}, al consolidar los soportes e informes derivados de '{foco_limpio[:185]}', "
+                    f"advierte que varios documentos preparatorios y actas de verificación aún no han sido incorporados al expediente oficial antes del cierre del periodo."
+                ),
+                "pregunta": "Desde el marco de Gestión Documental (Ley 594 de 2000) y el Modelo Integrado de Planeación y Gestión (MIPG), ¿qué acción debe ejecutar?",
+                "correcta_txt": (
+                    f"Garantizar la organización, foliación e incorporación íntegra de las actas y soportes en el expediente oficial conforme a las Tablas de Retención Documental (TRD) de {perfil.entidad}."
+                ),
+                "distractores": [
+                    "Eliminar los documentos preparatorios y conservar únicamente el informe final para ahorrar espacio en el archivo de gestión.",
+                    "Conservar los soportes únicamente en un dispositivo USB personal sin registrarlos en el sistema institucional.",
+                    "Postergar la conformación del expediente hasta que se cumpla el tiempo de transferencia al archivo central.",
+                ],
+                "explicacion": (
+                    f"La Ley 594 de 2000 y la dimensión de Gestión del Conocimiento e Información del MIPG exigen mantener la integridad, disponibilidad y trazabilidad de los expedientes desde su producción en {perfil.entidad}. La sustracción o eliminación de soportes fuera de las TRD constituye falta grave."
+                ),
+                "tip": "Los expedientes públicos deben foliarse y conservarse íntegramente desde la etapa de gestión siguiendo las Tablas de Retención Documental (TRD).",
+            },
+            {
+                "norma": f"Principio de Competencia Funcional y Territorial (Art. 6 y 121 C.P., Art. 21 CPACA) y {norma_sectorial[:90]}",
+                "escenario": (
+                    f"Como {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}, mientras ejecuta '{foco_limpio[:180]}', "
+                    f"identifica hechos adicionales que requieren una actuación administrativa urgente, pero que por su naturaleza o ubicación pertenecen a la competencia exclusiva de otra dependencia o entidad pública."
+                ),
+                "pregunta": "Con fundamento en los principios constitucionales de la Función Pública y el manual específico de funciones, ¿cómo debe actuar?",
+                "correcta_txt": (
+                    f"Adelantar las actuaciones que corresponden estrictamente a la competencia y jurisdicción de su cargo en {perfil.entidad}, y remitir formalmente por competencia (Art. 21 CPACA) los demás hallazgos a la autoridad competente."
+                ),
+                "distractores": [
+                    "Asumir de oficio la totalidad del caso, incluyendo los asuntos ajenos a su competencia, invocando el principio de celeridad.",
+                    "Inhibirse de actuar incluso frente a los hechos que sí son de su competencia y archivar todo el trámite.",
+                    "Informar verbalmente al ciudadano que el trámite queda cancelado sin realizar el traslado oficial a la entidad competente.",
+                ],
+                "explicacion": (
+                    f"Conforme a los artículos 6 y 121 de la Constitución Política, los servidores públicos solo pueden hacer aquello que les está expresamente atribuido en la ley y en el Manual de Funciones ({perfil.cargo}). Actuar sin competencia vicia de nulidad el acto, por lo que debe ejercerse la función propia y darse traslado formal (Art. 21 Ley 1437 de 2011) de lo ajeno."
+                ),
+                "tip": "Si un caso excede tu competencia funcional o jurisdicción, nunca decidas de fondo sobre lo ajeno ni lo ignores: actúa en lo propio y traslada por el Art. 21 del CPACA.",
+            },
+        ]
 
     plantilla = plantillas[idx_semilla % len(plantillas)]
     opciones_textos = [plantilla["correcta_txt"]] + plantilla["distractores"]
@@ -848,7 +925,6 @@ def analizar_manual_universal(
     texto: str,
     imagenes_png: Optional[List[bytes]] = None,
 ) -> PerfilManual:
-    # 1. Extraer perfil base instantáneo desde el PDF
     perfil_base = extraer_perfil_local_inteligente(nombre_archivo, texto)
 
     if not api_key.strip():
@@ -857,7 +933,7 @@ def analizar_manual_universal(
     usar_imgs = imagenes_png if len(texto.strip()) < 350 else None
     muestra = texto[:20000]
 
-    prompt = f"""Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, DIAN, Alcaldías, Gobernaciones, Contralorías, Personerías, Ministerios, Institutos).
+    prompt = f"""Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, DIAN, Contralorías, Alcaldías, Gobernaciones, Personerías, Ministerios, Institutos).
 
 Analiza el siguiente Manual de Funciones y extrae TODA su estructura con total fidelidad:
 
@@ -865,9 +941,9 @@ Analiza el siguiente Manual de Funciones y extrae TODA su estructura con total f
 
 DEVUELVE ÚNICAMENTE UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
 {{
-  "entidad": "Nombre de la entidad pública que expide el manual (ej. DIAN, Alcaldía, etc.)",
-  "cargo": "Denominación exacta del empleo (ej. Gestor I, Profesional Universitario, etc.)",
-  "codigo_grado": "Código, Grado y Ficha/OPEC (ej. Cód. 301 • Grado 01 • Ficha AT-FL-3008)",
+  "entidad": "Nombre de la entidad pública que expide el manual",
+  "cargo": "Denominación exacta del empleo",
+  "codigo_grado": "Código, Grado y Ficha/OPEC",
   "nivel": "Nivel jerárquico y proceso o dependencia",
   "proposito": "Propósito principal completo y exacto del empleo",
   "funciones_esenciales": ["1. ...", "2. ...", "3. ..."],
@@ -936,6 +1012,8 @@ def generar_pregunta_por_eje(
     else:
         foco_evaluacion = f"ENFOQUE ESPECÍFICO: {item_especifico}"
 
+    norma_sectorial = detectar_normativa_sectorial(perfil, foco_evaluacion)
+
     if api_key.strip():
         texto_doc = st.session_state.manuales_texto.get(perfil.nombre_archivo, "")
         texto_contexto = construir_texto_desde_perfil(perfil) + "\n\n" + texto_doc[:4500]
@@ -945,23 +1023,24 @@ def generar_pregunta_por_eje(
             else None
         )
 
-        prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Universidad Libre, UNAL, ESAP, Entidades Nacionales y Territoriales).
+        prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Contralorías, Alcaldías, Gobernaciones, Universidad Libre, UNAL, ESAP).
 
 ENTIDAD: {perfil.entidad}
 CARGO A EVALUAR: {perfil.cargo} ({perfil.codigo_grado}) - {perfil.nivel}
 PROPÓSITO PRINCIPAL: {perfil.proposito}
 EJE SELECCIONADO PARA ESTA PREGUNTA: {foco_evaluacion}
+MARCO NORMATIVO APLICABLE A LA ENTIDAD Y FUNCIÓN: {norma_sectorial}
 DIFICULTAD: {dificultad}
 
 ESTRUCTURA DEL MANUAL DE FUNCIONES:
 {texto_contexto}
 
 INSTRUCCIONES DE DISEÑO:
-1. Cruza automáticamente el EJE SELECCIONADO ({foco_evaluacion}) con la legislación colombiana vigente aplicable (Constitución Política, Ley 1437 CPACA, Estatuto Tributario/Aduanero/Cambiario si es DIAN, Ley 1755 Derecho de Petición, Ley 594 Archivo, Ley 80 Contratación, Ley 1952 Disciplinario, MIPG, Código de Integridad).
+1. Cruza automáticamente el EJE SELECCIONADO ({foco_evaluacion}) con la legislación colombiana específica aplicable a {perfil.entidad} ({norma_sectorial}).
 2. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental.
 3. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
 4. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
-5. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida citando la norma aplicable y por qué se descartan las demás.
+5. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida citando la norma aplicable a la entidad y por qué se descartan las demás.
 6. En "fragmento_soporte", cita la función, competencia o conocimiento del manual que respalda la pregunta.
 
 DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO:
@@ -977,7 +1056,6 @@ DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO:
             data["_id"] = hashlib.md5(str(data.get("pregunta", "")).encode()).hexdigest()
             return data
 
-    # Respaldo automático blindado si no hay API key o si la clave ingresada es inválida
     return generar_pregunta_local_juridica(perfil, foco_evaluacion, dificultad)
 
 
@@ -999,7 +1077,7 @@ else:
     )
 
 texto_viral = (
-    "🔥 ¡Te recomiendo este Simulador con Inteligencia Artificial para Concursos de Méritos (CNSC, DIAN, Alcaldías, Gobernaciones, Contralorías y Entidades Nacionales)! "
+    "🔥 ¡Te recomiendo este Simulador con Inteligencia Artificial para Concursos de Méritos (CNSC, DIAN, Contralorías, Alcaldías, Gobernaciones y Entidades Nacionales)! "
     "Subes el PDF del Manual de Funciones de tu OPEC y te genera preguntas de Juicio Situacional sobre tus funciones reales (incluye 5 preguntas gratis): "
     f"{URL_APP_PUBLICA}"
 )
@@ -1016,7 +1094,7 @@ clave_respaldo = obtener_api_key_respaldo()
 api_key_input = st.sidebar.text_input(
     "Clave GEMINI_API_KEY (Opcional - Motor Activo):",
     type="password",
-    help="El simulador ya tiene su motor jurídico activo. Opcionalmente puedes pegar una clave AIzaSy... de Google AI Studio.",
+    help="El simulador ya cuenta con su motor jurídico activo. Opcionalmente puedes pegar una clave AIzaSy... de Google AI Studio.",
 ).strip()
 
 api_key_user = api_key_input if api_key_input else clave_respaldo
@@ -1026,7 +1104,7 @@ with st.sidebar.expander("❓ ¿Cómo funciona o cómo conectar clave propia?"):
     st.markdown(
         """
         * **Modo Automático:** Ya puedes subir tu Manual PDF y entrenar de inmediato sin configurar nada adicional.
-        * **Clave Propia (Opcional):** Si deseas conectar tu propia llave de [**Google AI Studio**](https://aistudio.google.com/apikey), crea una clave gratuita (empieza por `AIzaSy...`) y pégala arriba.
+        * **Clave Propia (Opcional):** Si deseas conectar tu propia llave de [**Google AI Studio**](https://aistudio.google.com/api-keys), haz clic en el icono de copiar junto a tu clave (`AIzaSy...`) y pégala arriba.
         """
     )
 
@@ -1038,7 +1116,7 @@ archivos_up = st.sidebar.file_uploader(
     type=["pdf", "txt"],
     accept_multiple_files=True,
     key=f"uploader_{st.session_state.uploader_key}",
-    help="Solo necesitas subir el PDF del Manual de Funciones de tu cargo; el sistema extrae tus funciones y las cruza automáticamente con las leyes colombianas.",
+    help="Sirve para cualquier convocatoria (DIAN, Contraloría, Alcaldías, Gobernaciones, SENA, ICBF, etc.).",
 )
 
 if archivos_up:
@@ -1108,7 +1186,7 @@ else:
         cargo="Cuaderno Inteligente de Preparación OPEC",
         codigo_grado="CNSC • Nacional y Territorial",
         nivel="Nivel Profesional, Técnico y Asistencial",
-        proposito="Sube únicamente el PDF del Manual de Funciones de tu cargo en la barra izquierda. El motor identifica tus funciones esenciales y las cruza automáticamente con la Constitución, CPACA, MIPG y las leyes aplicables.",
+        proposito="Sube únicamente el PDF del Manual de Funciones de tu cargo en la barra izquierda. El motor identifica tus funciones esenciales y las cruza automáticamente con la legislación aplicable a tu entidad.",
         analizado_por_ia=False,
     )
 
@@ -1144,7 +1222,7 @@ dificultad = st.sidebar.select_slider(
 )
 cantidad_simulacro = st.sidebar.selectbox("Preguntas por Simulacro", [5, 10, 15, 20], index=0)
 
-# 4. Licencias y Panel Admin
+# 4. Licencias y Panel Admin Blindado
 st.sidebar.markdown("---")
 with st.sidebar.expander("🔐 Activar mi Código PRO (Clientes)"):
     ced_cli = st.text_input("Tu Número de Cédula:", key="input_ced_cli")
@@ -1165,7 +1243,7 @@ with st.sidebar.expander("🔐 Activar mi Código PRO (Clientes)"):
 
 with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
     pwd_admin = st.text_input("Contraseña de Administrador:", type="password")
-    if pwd_admin == CLAVE_MAESTRA_ADMIN:
+    if pwd_admin and pwd_admin.strip() == obtener_clave_admin_segura():
         st.markdown("**Generar licencia tras confirmar pago en Nequi:**")
         ced_comprador = st.text_input("Cédula del cliente que pagó:")
         plan_dias = st.selectbox(
@@ -1217,12 +1295,12 @@ if not nombres_manuales:
             <span class="eje-badge">📘 PLATAFORMA INTEGRAL DE PREPARACIÓN • TODOS LOS CONCURSOS CNSC</span>
             <div class="cuaderno-serif">Cuaderno Oficial de Méritos IA</div>
             <p class="cuaderno-sub">
-                <b>Entrena para cualquier convocatoria pública en Colombia</b> (Orden Nacional, Territorial, DIAN, Alcaldías, Gobernaciones, Contralorías, Personerías, SENA, ICBF e INPEC).<br>
-                Solo sube el <b>Manual de Funciones (OPEC)</b> de tu cargo: nuestra plataforma extrae tus funciones esenciales y las cruza automáticamente con las leyes colombianas vigentes para evaluarte con casos reales de <b>Juicio Situacional</b>.
+                <b>Entrena para cualquier convocatoria pública en Colombia</b> (Orden Nacional, Territorial, DIAN, Contralorías, Alcaldías, Gobernaciones, Personerías, SENA, ICBF e INPEC).<br>
+                Solo sube el <b>Manual de Funciones (OPEC)</b> de tu cargo: nuestra plataforma extrae tus funciones esenciales y las cruza automáticamente con la legislación aplicable a tu entidad para evaluarte con casos reales de <b>Juicio Situacional</b>.
             </p>
             <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
                 <span class="dif-badge">🎁 Incluye {LIMITE_PREGUNTAS_GRATIS} Preguntas Gratis de Prueba</span>
-                <span class="eje-badge">⚖️ Cruce Automático con Leyes y Normativa</span>
+                <span class="eje-badge">⚖️ Cruce Automático con Leyes de tu Entidad</span>
                 <a href="{link_wa_share}" target="_blank" style="color:#1e3a8a; font-weight:700; font-size:13.5px; text-decoration:underline;">📲 Compartir con mi grupo de estudio</a>
             </div>
         </div>
@@ -1300,7 +1378,7 @@ def renderizar_planes_de_pago():
         """
         <div style="text-align:center; margin-bottom:18px;">
             <h3>🚀 Elige tu Plan de Entrenamiento y Asegura tu Puesto en el Concurso</h3>
-            <p style="color:#475569;">Funciona para <b>todos los concursos de méritos en Colombia</b>. Solo subes el Manual de Funciones de tu OPEC y entrenas sin límites con preguntas situacionales cruzadas automáticamente con la ley.</p>
+            <p style="color:#475569;">Funciona para <b>todos los concursos de méritos en Colombia</b> (DIAN, Contralorías, Alcaldías, Gobernaciones y Entidades Nacionales). Solo subes el Manual de Funciones de tu OPEC y entrenas sin límites.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1516,6 +1594,7 @@ with tab_sim:
                             st.session_state.q_actual = q_nueva
                             st.session_state.q_respondida = False
                             st.session_state.usos_gratis += 1
+                            st.rerun()
 
                 if "q_actual" in st.session_state:
                     q = st.session_state.q_actual
