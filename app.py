@@ -3,10 +3,12 @@ import datetime
 import hashlib
 import html
 import json
+import os
 import random
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
@@ -20,15 +22,15 @@ from google.genai import types
 # ==========================================
 NUMERO_NEQUI_WHATSAPP = "3108137030"
 WHATSAPP_INTL = f"57{NUMERO_NEQUI_WHATSAPP}"
-URL_PSE_NEQUI = "https://recarga.nequi.com.co/"
+URL_APP_PUBLICA = "https://simulador-cnsc.streamlit.app"
 CLAVE_MAESTRA_ADMIN = "OMAR2026"
-LIMITE_PREGUNTAS_GRATIS = 2
+LIMITE_PREGUNTAS_GRATIS = 5  # 5 preguntas de demostración gratuita
 
 # ==========================================
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS SAAS PRO
+# CONFIGURACIÓN DE PÁGINA Y SEO / ESTILOS SAAS
 # ==========================================
 st.set_page_config(
-    page_title="Mérito PRO | Simulador Inteligente de Concursos Públicos",
+    page_title="Cuaderno de Méritos IA | Simulador Oficial CNSC y Concursos Públicos",
     page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -37,9 +39,38 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+    /* Portada Editorial estilo Cuaderno de Méritos */
+    .cuaderno-cover {
+        background: linear-gradient(135deg, #fdfbf7 0%, #f5efe6 100%);
+        border: 2px solid #1e3a8a;
+        border-left: 14px solid #1e3a8a;
+        border-radius: 16px;
+        padding: 32px 36px;
+        margin-bottom: 22px;
+        box-shadow: 0 14px 30px -8px rgba(15, 23, 42, 0.12);
+        color: #0f172a;
+        position: relative;
+    }
+    .cuaderno-serif {
+        font-family: 'Playfair Display', Georgia, serif;
+        font-size: 34px;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 6px 0 8px 0;
+        letter-spacing: -0.5px;
+    }
+    .cuaderno-sub {
+        font-size: 15.5px;
+        color: #334155;
+        font-weight: 500;
+        margin-bottom: 18px;
+        line-height: 1.6;
+    }
+
+    /* Banner Activo cuando ya cargaron Manual */
     .hero-box {
         background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 52%, #2563eb 100%);
         color: white;
@@ -175,22 +206,34 @@ st.markdown(
         background: #16a34a;
         color: white !important;
         font-weight: 700;
-        padding: 11px 16px;
+        padding: 12px 16px;
         border-radius: 10px;
         text-decoration: none;
-        margin-top: 12px;
-        font-size: 14px;
+        margin-top: 14px;
+        font-size: 14.5px;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
     }
-    .btn-pse {
+    .btn-share {
         display: block;
-        background: #1e40af;
-        color: white !important;
+        background: #0f172a;
+        color: #ffffff !important;
         font-weight: 700;
-        padding: 11px 16px;
+        padding: 10px 14px;
         border-radius: 10px;
         text-decoration: none;
+        text-align: center;
+        font-size: 13px;
         margin-top: 8px;
-        font-size: 13.5px;
+        border: 1px solid #334155;
+    }
+    .nequi-box {
+        background: #fdf2f8;
+        border: 2px dashed #db2777;
+        border-radius: 14px;
+        padding: 18px;
+        margin-top: 18px;
+        text-align: center;
+        color: #831843;
     }
 </style>
 """,
@@ -313,8 +356,18 @@ def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
 
 
 # ==========================================
-# CONECTOR UNIVERSAL IA (SOPORTA CLAVES AQ. Y AIzaSy)
+# MOTOR HÍBRIDO DE CLAVE IA Y CONECTOR UNIVERSAL
 # ==========================================
+
+
+def obtener_api_key_respaldo() -> str:
+  """Permite que Omar configure una clave opcional en Streamlit Secrets para dar las 5 preguntas gratis sin fricción."""
+  try:
+    if "GEMINI_API_KEY" in st.secrets:
+      return str(st.secrets["GEMINI_API_KEY"]).strip()
+  except Exception:
+    pass
+  return os.environ.get("GEMINI_API_KEY", "").strip()
 
 
 def llamar_gemini_universal(
@@ -325,7 +378,6 @@ def llamar_gemini_universal(
     return None
   st.session_state.ultimo_error_ia = ""
 
-  # Preparar partes para REST (compatible con AI Studio y Vertex AI Express)
   parts_rest = [{"text": prompt}]
   if imagenes_png:
     for img_b in imagenes_png[:3]:
@@ -337,7 +389,6 @@ def llamar_gemini_universal(
       {"contents": [{"role": "user", "parts": parts_rest}]}
   ).encode("utf-8")
 
-  # Definir orden de servidores según el prefijo de la clave (AQ. = Vertex Express)
   es_vertex_key = key.startswith("AQ.")
   for mod in MODELOS_GEMINI:
     urls = (
@@ -380,7 +431,6 @@ def llamar_gemini_universal(
         st.session_state.ultimo_error_ia = str(e)[:160]
         continue
 
-    # Respaldo adicional con SDK google-genai
     for v_mode in ([True, False] if es_vertex_key else [False, True]):
       try:
         cli = genai.Client(vertexai=v_mode, api_key=key)
@@ -422,7 +472,6 @@ def extraer_pdf_con_imagenes(
         pags.append(Pagina(nombre, i + 1, t))
         full_txt += f"\n--- PÁGINA {i+1} ---\n" + t
 
-      # Renderizar las primeras 3 páginas como imagen PNG para leer tablas tipo DIAN
       if i < 3:
         pix = page.get_pixmap(dpi=150)
         imgs_png.append(pix.tobytes("png"))
@@ -441,22 +490,22 @@ def analizar_manual_universal(
 ) -> PerfilManual:
   muestra = texto[:22000]
   prompt = f"""
-  Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (DIAN, CNSC, Contraloría, Alcaldías, Gobernaciones, Entidades Nacionales).
+  Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, Entidades del Orden Nacional y Territorial, Alcaldías, Gobernaciones, Contralorías, Personerías, Ministerios, Institutos).
 
-  Analiza visualmente las imágenes de las páginas del manual adjunto y su texto para extraer TODA su estructura con total fidelidad (incluyendo formatos en tablas como FT-TAH-1824 de la DIAN o resoluciones de Contraloría/CNSC).
+  Analiza visualmente las imágenes de las páginas del manual adjunto y su texto para extraer TODA su estructura con total fidelidad (incluyendo formatos en tablas o resoluciones oficiales).
 
   Texto auxiliar detectado:
   {muestra}
 
   DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO (sin bloques markdown):
   {{
-    "entidad": "Nombre de la entidad pública (ej. DIAN, Contraloría de Bogotá, Alcaldía, etc.)",
-    "cargo": "Denominación exacta del empleo (ej. Gestor I, Secretario, Profesional Universitario)",
-    "codigo_grado": "Código, Grado y Ficha (ej. Código 301 - Grado 01 | Ficha AT-FL-3008)",
-    "nivel": "Nivel jerárquico y proceso/dependencia (ej. Nivel Profesional - Fiscalización y Liquidación)",
+    "entidad": "Nombre de la entidad pública que expide el manual",
+    "cargo": "Denominación exacta del empleo (ej. Profesional Universitario, Técnico Administrativo, Secretario, Gestor, etc.)",
+    "codigo_grado": "Código, Grado y Ficha/OPEC si aparece",
+    "nivel": "Nivel jerárquico y proceso o dependencia",
     "proposito": "Propósito principal completo y exacto del empleo",
     "funciones_esenciales": ["1. ...", "2. ...", "3. ..."],
-    "conocimientos_ejes": ["Conocimiento o eje temático 1...", "Conocimiento 2..."],
+    "conocimientos_ejes": ["Conocimiento básico o eje temático 1...", "Conocimiento 2..."],
     "competencias_funcionales": ["Competencia funcional 1...", "Competencia funcional 2..."],
     "competencias_comportamentales": ["Competencia comportamental 1...", "Competencia 2..."],
     "requisitos": "Requisitos completos de estudio (NBC/Títulos) y experiencia"
@@ -494,7 +543,7 @@ def analizar_manual_universal(
       cargo=nombre_archivo.replace(".pdf", "").replace(".txt", ""),
       codigo_grado="Haz clic en '🔄 Re-analizar IA' en la barra izquierda",
       nivel="Concurso de Méritos",
-      proposito="Pega tu GEMINI_API_KEY en la barra lateral izquierda y haz clic en el botón '🔄 Re-analizar IA' para extraer el cargo, funciones y competencias.",
+      proposito="Activa tu Clave Gratuita de IA en la barra lateral izquierda y haz clic en el botón '🔄 Re-analizar IA' para extraer el cargo, funciones y competencias.",
       funciones_esenciales=["Pendiente de extracción con IA."],
       conocimientos_ejes=["Pendiente de extracción con IA."],
       competencias_funcionales=["Pendiente de extracción con IA."],
@@ -553,7 +602,7 @@ def generar_pregunta_por_eje(
       else st.session_state.manuales_imgs.get(perfil.nombre_archivo)
   )
 
-  prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Contraloría, Universidad Libre, UNAL, ESAP).
+  prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, Universidad Libre, UNAL, ESAP, Entidades Nacionales y Territoriales).
 
 ENTIDAD: {perfil.entidad}
 CARGO A EVALUAR: {perfil.cargo} ({perfil.codigo_grado}) - {perfil.nivel}
@@ -561,15 +610,16 @@ PROPÓSITO PRINCIPAL: {perfil.proposito}
 EJE SELECCIONADO PARA ESTA PREGUNTA: {foco_evaluacion}
 DIFICULTAD: {dificultad}
 
-ESTRUCTURA DEL MANUAL DE FUNCIONES:
+ESTRUCTURA DEL MANUAL DE FUNCIONES Y DOCUMENTOS CARGADOS:
 {texto_contexto}
 
 INSTRUCCIONES DE DISEÑO:
-1. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental directamente relacionado con el EJE SELECCIONADO ({foco_evaluacion}).
-2. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
-3. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
-4. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida y por qué se descartan las demás.
-5. En "fragmento_soporte", cita la función, competencia o conocimiento del manual que respalda la pregunta.
+1. Cruza automáticamente el EJE SELECCIONADO ({foco_evaluacion}) con la legislación colombiana vigente aplicable (Constitución Política, Ley 1437 CPACA, Ley 1755 Derecho de Petición, Ley 594 Archivo, Ley 80 Contratación, Ley 1952 Disciplinario, MIPG, Código de Integridad o normativa técnica de la entidad) sin necesidad de que el usuario haya subido el texto completo de la ley.
+2. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental.
+3. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
+4. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
+5. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida citando la norma colombiana aplicable y por qué se descartan las demás.
+6. En "fragmento_soporte", cita la función, competencia o conocimiento del manual que respalda la pregunta.
 
 DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin markdown):
 {{"eje_evaluado":"{foco_evaluacion[:90]}","pregunta":"...","opciones":{{"A":"...","B":"...","C":"...","D":"..."}},"correcta":"A","explicacion":"...","tip_estrategico":"...","fuente":"{perfil.nombre_archivo}","fragmento_soporte":"..."}}"""
@@ -595,7 +645,8 @@ DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin markdown):
 # ==========================================
 # BARRA LATERAL (SIDEBAR)
 # ==========================================
-st.sidebar.markdown("## 🏛️ Mérito PRO Colombia")
+st.sidebar.markdown("## 🏛️ Cuaderno de Méritos IA")
+st.sidebar.caption("Entrenador Inteligente para Concursos Públicos en Colombia")
 
 lic = st.session_state.licencia_info
 if lic["activa"]:
@@ -605,35 +656,54 @@ if lic["activa"]:
 else:
   disp = max(0, LIMITE_PREGUNTAS_GRATIS - st.session_state.usos_gratis)
   st.sidebar.warning(
-      f"🎁 **Modo Prueba Gratis:** Te quedan **{disp}** de {LIMITE_PREGUNTAS_GRATIS} preguntas de demostración."
+      f"🎁 **Prueba Gratuita Activa:** Tienes **{disp}** de {LIMITE_PREGUNTAS_GRATIS} preguntas gratis disponibles."
   )
 
-# 1. Configuración de Clave IA
+# Botón Viral para Compartir y Recomendar la Aplicación
+texto_viral = (
+    "🔥 ¡Te recomiendo este Simulador con Inteligencia Artificial para Concursos de Méritos (CNSC, Alcaldías, Gobernaciones, Contralorías y Entidades Nacionales)! "
+    "Subes el PDF del Manual de Funciones de tu OPEC y te genera preguntas de Juicio Situacional sobre tus funciones reales (incluye 5 preguntas gratis): "
+    f"{URL_APP_PUBLICA}"
+)
+link_wa_share = f"https://wa.me/?text={urllib.parse.quote(texto_viral)}"
+st.sidebar.markdown(
+    f'<a href="{link_wa_share}" target="_blank" class="btn-share">📲 Recomendar esta App en WhatsApp</a>',
+    unsafe_allow_html=True,
+)
+
+# 1. Configuración Híbrida de Clave IA
 st.sidebar.markdown("---")
-st.sidebar.subheader("🔑 1. Tu Clave Gratuita de IA")
-api_key_user = st.sidebar.text_input(
-    "Pega tu GEMINI_API_KEY personal:",
+st.sidebar.subheader("🔑 1. Conexión de IA")
+clave_respaldo = obtener_api_key_respaldo()
+api_key_input = st.sidebar.text_input(
+    "Pega tu GEMINI_API_KEY gratuita:",
     type="password",
-    help="Pega tu clave de Google AI Studio y presiona Enter.",
+    help="Pega tu clave gratuita de Google AI Studio y presiona Enter.",
 ).strip()
 
-with st.sidebar.expander("❓ ¿Cómo obtener mi clave GRATIS en 30 seg?"):
-  st.markdown(
-      """
-      1. Entra gratis a [**Google AI Studio (Clic aquí)**](https://aistudio.google.com/apikey) con tu cuenta de Gmail.
-      2. Haz clic en **"Create API key"**.
-      3. Copia la clave generada y pégala arriba.
-      """
-  )
+api_key_user = api_key_input if api_key_input else clave_respaldo
+
+if clave_respaldo and not api_key_input:
+  st.sidebar.success("⚡ Motor IA pre-conectado para tu prueba gratuita.")
+else:
+  with st.sidebar.expander("❓ ¿Cómo sacar mi clave GRATIS en 30 seg?"):
+    st.markdown(
+        """
+        1. Entra gratis a [**Google AI Studio (Clic aquí)**](https://aistudio.google.com/apikey) con tu correo Gmail.
+        2. Haz clic en el botón azul **"Create API key"**.
+        3. Copia el código generado y pégalo arriba. ¡Es 100% gratis!
+        """
+    )
 
 # 2. Carga de Manuales con Escáner Visual
 st.sidebar.markdown("---")
-st.sidebar.subheader("📂 2. Sube tu Manual de Funciones")
+st.sidebar.subheader("📂 2. Sube tu Manual OPEC")
 archivos_up = st.sidebar.file_uploader(
-    "Carga cualquier Manual OPEC (PDF o TXT)",
+    "Sube solo tu Manual de Funciones (y Leyes opcionales)",
     type=["pdf", "txt"],
     accept_multiple_files=True,
     key=f"uploader_{st.session_state.uploader_key}",
+    help="Solo necesitas subir el PDF del Manual de Funciones de tu cargo; la IA ya conoce las leyes colombianas y las cruza automáticamente.",
 )
 
 if archivos_up:
@@ -651,14 +721,13 @@ if archivos_up:
       st.session_state.manuales_texto[arc.name] = txt_doc or "Documento PDF"
       st.session_state.paginas.extend(pags)
 
-# Perfilar automáticamente si hay archivos nuevos y ya hay API Key
 archivos_nuevos = [
     k for k in st.session_state.manuales_texto.keys() if k not in st.session_state.perfiles
 ]
 if archivos_nuevos:
   for k_pend in archivos_nuevos:
     if api_key_user:
-      with st.spinner(f"🔍 Escaneando tablas y funciones de {k_pend} con Visión IA..."):
+      with st.spinner(f"🔍 Escaneando funciones y ejes de {k_pend} con Visión IA..."):
         nuevo_p = analizar_manual_universal(
             api_key_user,
             k_pend,
@@ -706,14 +775,14 @@ if nombres_manuales:
       st.session_state.uploader_key += 1
       st.rerun()
 else:
-  st.sidebar.warning("⚠️ Sube tu Manual de Funciones (PDF o TXT) para comenzar.")
+  st.sidebar.info("💡 Sube las páginas del Manual de Funciones de tu cargo para comenzar.")
   perfil_activo = PerfilManual(
       nombre_archivo="ninguno",
-      entidad="Esperando Manual de Funciones...",
-      cargo="Sube tu Manual de Funciones en PDF",
-      codigo_grado="Sin archivo cargado",
-      nivel="Cualquier Concurso de Méritos",
-      proposito="Sube el Manual de Funciones o Ficha OPEC de tu cargo en la barra lateral izquierda (Sección 2). Nuestro escáner con Visión IA leerá automáticamente tus funciones esenciales, ejes temáticos y competencias.",
+      entidad="Todos los Concursos de Méritos en Colombia",
+      cargo="Cuaderno Inteligente de Preparación OPEC",
+      codigo_grado="CNSC • Nacional y Territorial",
+      nivel="Nivel Profesional, Técnico y Asistencial",
+      proposito="Sube únicamente el PDF del Manual de Funciones de tu cargo en la barra izquierda. El motor de IA identifica tus funciones esenciales y las cruza automáticamente con la Constitución, CPACA, MIPG y las leyes aplicables.",
       analizado_por_ia=False,
   )
 
@@ -721,7 +790,7 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 3. Modo de Entrenamiento")
 modalidad_eje = st.sidebar.selectbox(
-    "¿Sobre qué quieres que te pregunte la IA?",
+    "¿Sobre qué quieres que te evalúe la IA?",
     [
         "🎲 Aleatoria Integral (Mezcla Funciones + Ejes + Comportamentales)",
         "📋 Solo Funciones Esenciales del Cargo",
@@ -744,10 +813,10 @@ if modalidad_eje.startswith("🔍"):
 
 dificultad = st.sidebar.select_slider(
     "Nivel de Dificultad",
-    options=["Básica", "Alta", "Muy Alta (Nivel Prueba CNSC/DIAN)"],
+    options=["Básica", "Alta", "Muy Alta (Nivel Prueba Oficial CNSC)"],
     value="Alta",
 )
-cantidad_simulacro = st.sidebar.selectbox("Preguntas por Simulacro", [3, 5, 10, 20], index=1)
+cantidad_simulacro = st.sidebar.selectbox("Preguntas por Simulacro", [5, 10, 15, 20], index=0)
 
 # 4. Licencias y Panel Admin
 st.sidebar.markdown("---")
@@ -790,14 +859,14 @@ with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
       st.caption("Copia y envíale este código a tu cliente por WhatsApp.")
 
 # ==========================================
-# GUÍA VISUAL DE 3 PASOS + CABECERA PRINCIPAL
+# GUÍA VISUAL DE 3 PASOS + CABECERA EDITORIAL
 # ==========================================
 s1, s2, s3 = st.columns(3)
 with s1:
   cls1 = "step-ok" if api_key_user else "step-wait"
   ico1 = "✅" if api_key_user else "1️⃣"
   st.markdown(
-      f'<div class="step-card {cls1}"><div><b>{ico1} Paso 1: Clave IA</b><br><small>{"Conectada y lista" if api_key_user else "Pega tu GEMINI_API_KEY a la izquierda"}</small></div></div>',
+      f'<div class="step-card {cls1}"><div><b>{ico1} Paso 1: Conexión IA</b><br><small>{"Activa y lista" if api_key_user else "Pega tu clave gratuita a la izquierda"}</small></div></div>',
       unsafe_allow_html=True,
   )
 with s2:
@@ -805,7 +874,7 @@ with s2:
   cls2 = "step-ok" if ok_man else "step-wait"
   ico2 = "✅" if ok_man else "2️⃣"
   st.markdown(
-      f'<div class="step-card {cls2}"><div><b>{ico2} Paso 2: Manual OPEC</b><br><small>{html.escape(perfil_activo.cargo[:35]) if ok_man else "Sube tu PDF o pulsa Re-analizar IA"}</small></div></div>',
+      f'<div class="step-card {cls2}"><div><b>{ico2} Paso 2: Tu Manual OPEC</b><br><small>{html.escape(perfil_activo.cargo[:35]) if ok_man else "Sube solo tu Manual de Funciones PDF"}</small></div></div>',
       unsafe_allow_html=True,
   )
 with s3:
@@ -813,20 +882,41 @@ with s3:
   cls3 = "step-ok" if ok_todo else "step-wait"
   ico3 = "🚀" if ok_todo else "3️⃣"
   st.markdown(
-      f'<div class="step-card {cls3}"><div><b>{ico3} Paso 3: Entrenar</b><br><small>{"¡Listo para generar preguntas!" if ok_todo else "Completa los pasos 1 y 2"}</small></div></div>',
+      f'<div class="step-card {cls3}"><div><b>{ico3} Paso 3: Entrenar y Ganar</b><br><small>{"¡Listo! Tienes 5 preguntas de prueba" if ok_todo else "Completa los pasos 1 y 2"}</small></div></div>',
       unsafe_allow_html=True,
   )
 
-st.markdown(
-    f"""
-<div class="hero-box">
-    <div class="hero-tag">🇨🇴 ENTRENADOR OFICIAL MULTICONCURSO • {html.escape(perfil_activo.entidad.upper())}</div>
-    <h1 class="hero-title">{html.escape(perfil_activo.cargo)} — {html.escape(perfil_activo.codigo_grado)}</h1>
-    <p class="hero-sub"><b>Propósito del Cargo:</b> {html.escape(perfil_activo.proposito)}</p>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+# Mostrar Portada Editorial "Cuaderno de Méritos" si aún no han subido archivo, o el Hero del Cargo si ya subieron
+if not nombres_manuales:
+  st.markdown(
+      f"""
+      <div class="cuaderno-cover">
+          <span class="eje-badge">📘 PLATAFORMA INTEGRAL DE PREPARACIÓN • TODOS LOS CONCURSOS CNSC</span>
+          <div class="cuaderno-serif">Cuaderno Oficial de Méritos IA</div>
+          <p class="cuaderno-sub">
+              <b>Entrena para cualquier convocatoria pública en Colombia</b> (Orden Nacional, Territorial, Alcaldías, Gobernaciones, Contralorías, Personerías, SENA, ICBF e INPEC).<br>
+              Solo sube el <b>Manual de Funciones (OPEC)</b> de tu cargo: nuestra Inteligencia Artificial extrae tus funciones esenciales y las cruza automáticamente con las leyes colombianas vigentes para evaluarte con casos reales de <b>Juicio Situacional</b>.
+          </p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+              <span class="dif-badge">🎁 Incluye {LIMITE_PREGUNTAS_GRATIS} Preguntas Gratis de Prueba</span>
+              <span class="eje-badge">⚖️ Cruce Automático con Leyes y Normativa</span>
+              <a href="{link_wa_share}" target="_blank" style="color:#1e3a8a; font-weight:700; font-size:13.5px; text-decoration:underline;">📲 Compartir con mi grupo de estudio</a>
+          </div>
+      </div>
+      """,
+      unsafe_allow_html=True,
+  )
+else:
+  st.markdown(
+      f"""
+      <div class="hero-box">
+          <div class="hero-tag">🇨🇴 ENTRENADOR OFICIAL MULTICONCURSO • {html.escape(perfil_activo.entidad.upper())}</div>
+          <h1 class="hero-title">{html.escape(perfil_activo.cargo)} — {html.escape(perfil_activo.codigo_grado)}</h1>
+          <p class="hero-sub"><b>Propósito del Cargo:</b> {html.escape(perfil_activo.proposito)}</p>
+      </div>
+      """,
+      unsafe_allow_html=True,
+  )
 
 precision_global = (
     (st.session_state.puntaje / st.session_state.total * 100)
@@ -862,7 +952,7 @@ with k4:
   est_txt = (
       f"PRO (Vence {lic['vence']})"
       if lic["activa"]
-      else f"DEMO ({max(0, LIMITE_PREGUNTAS_GRATIS - st.session_state.usos_gratis)} disp.)"
+      else f"DEMO ({max(0, LIMITE_PREGUNTAS_GRATIS - st.session_state.usos_gratis)} de {LIMITE_PREGUNTAS_GRATIS} disp.)"
   )
   st.markdown(
       f'<div class="kpi-box"><div class="kpi-label">Estado de tu Cuenta</div><div class="kpi-num" style="font-size:16px; color:#16a34a;">{est_txt}</div></div>',
@@ -876,9 +966,9 @@ st.write("")
 # ==========================================
 tab_sim, tab_ficha, tab_comp, tab_planes = st.tabs([
     "🎯 Simulador Inteligente",
-    "📋 Radiografía del Manual Activo",
-    "🔄 Comparador de Manuales (OPEC)",
-    "💎 Planes de Acceso (Nequi / PSE)",
+    "📋 Radiografía de tu Manual",
+    "🔄 Comparador de Cargos (OPEC)",
+    "💎 Planes y Activación Nequi / Llave",
 ])
 
 
@@ -887,7 +977,7 @@ def renderizar_planes_de_pago():
       """
       <div style="text-align:center; margin-bottom:18px;">
           <h3>🚀 Elige tu Plan de Entrenamiento y Asegura tu Puesto en el Concurso</h3>
-          <p style="color:#475569;">Sube cualquier Manual de Funciones (DIAN, Contraloría, CNSC, Gobernaciones, Alcaldías) y entrena sin límites con preguntas aleatorias sobre tus funciones reales.</p>
+          <p style="color:#475569;">Funciona para <b>todos los concursos de méritos en Colombia</b>. Solo subes el Manual de Funciones de tu OPEC y entrenas sin límites con preguntas situacionales cruzadas automáticamente con la ley.</p>
       </div>
       """,
       unsafe_allow_html=True,
@@ -895,30 +985,29 @@ def renderizar_planes_de_pago():
 
   p1, p2, p3 = st.columns(3)
   with p1:
-    wa_1 = f"https://wa.me/{WHATSAPP_INTL}?text=Hola,%20acabo%20de%20pagar%20el%20Pase%20Intensivo%20de%20$14.900%20(7%20dias)%20a%20Nequi%20{NUMERO_NEQUI_WHATSAPP}.%20Mi%20cedula%20es:%20"
+    wa_1 = f"https://wa.me/{WHATSAPP_INTL}?text=Hola,%20acabo%20de%20transferir%20el%20Pase%20Intensivo%20de%20$14.900%20(7%20dias)%20a%20Nequi/Llave%20{NUMERO_NEQUI_WHATSAPP}.%20Adjunto%20comprobante.%20Mi%20cedula%20es:%20"
     st.markdown(
         f"""
         <div class="plan-card">
             <span class="eje-badge">⚡ COMPRA RÁPIDA</span>
             <h4 style="margin:10px 0 4px 0;">Pase Intensivo (7 Días)</h4>
             <div class="plan-price">$14.900 <small style="font-size:13px; color:#64748b;">COP</small></div>
-            <p style="font-size:13px; color:#64748b;">Ideal para repaso final antes del examen</p>
+            <p style="font-size:13px; color:#64748b;">Ideal para repaso intensivo antes del examen</p>
             <hr>
-            <div style="text-align:left; font-size:13.5px; line-height:1.7;">
+            <div style="text-align:left; font-size:13.5px; line-height:1.75;">
                 ✅ <b>7 días</b> de simulacros ilimitados.<br>
-                ✅ Sube tus propios manuales en PDF.<br>
-                ✅ Preguntas por Funciones, Ejes y Comportamentales.<br>
-                ✅ Retroalimentación normativa inmediata.
+                ✅ Sirve para cualquier concurso y OPEC.<br>
+                ✅ Cruce automático de funciones + leyes.<br>
+                ✅ Retroalimentación jurídica inmediata.
             </div>
-            <a href="{wa_1}" target="_blank" class="btn-pay">📲 Pagar $14.900 y Pedir Código</a>
-            <a href="{URL_PSE_NEQUI}" target="_blank" class="btn-pse">🏦 Pagar por PSE a Nequi {NUMERO_NEQUI_WHATSAPP}</a>
+            <a href="{wa_1}" target="_blank" class="btn-pay">📲 Ya transferí $14.900 • Pedir Código por WhatsApp</a>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
   with p2:
-    wa_2 = f"https://wa.me/{WHATSAPP_INTL}?text=Hola,%20acabo%20de%20pagar%20el%20Pase%20Mensual%20PRO%20de%20$24.900%20(30%20dias)%20a%20Nequi%20{NUMERO_NEQUI_WHATSAPP}.%20Mi%20cedula%20es:%20"
+    wa_2 = f"https://wa.me/{WHATSAPP_INTL}?text=Hola,%20acabo%20de%20transferir%20el%20Pase%20Mensual%20PRO%20de%20$24.900%20(30%20dias)%20a%20Nequi/Llave%20{NUMERO_NEQUI_WHATSAPP}.%20Adjunto%20comprobante.%20Mi%20cedula%20es:%20"
     st.markdown(
         f"""
         <div class="plan-card-popular">
@@ -927,48 +1016,53 @@ def renderizar_planes_de_pago():
             <div class="plan-price">$24.900 <small style="font-size:13px; color:#64748b;">COP</small></div>
             <p style="font-size:13px; color:#1e40af; font-weight:600;">Entrenamiento completo para dominar tu OPEC</p>
             <hr>
-            <div style="text-align:left; font-size:13.5px; line-height:1.7;">
+            <div style="text-align:left; font-size:13.5px; line-height:1.75;">
                 ✅ <b>30 días completos</b> de acceso ilimitado.<br>
-                ✅ Carga ilimitada de Manuales y Leyes.<br>
-                ✅ Comparador de cargos y OPEC.<br>
+                ✅ Carga ilimitada de Manuales OPEC y Normas.<br>
+                ✅ Comparador estratégico de cargos.<br>
                 ✅ Simulacros cronometrados de hasta 20 preguntas.<br>
-                ✅ Soporte prioritario por WhatsApp.
+                ✅ Activación prioritaria por WhatsApp.
             </div>
-            <a href="{wa_2}" target="_blank" class="btn-pay">📲 Pagar $24.900 y Activar por WhatsApp</a>
-            <a href="{URL_PSE_NEQUI}" target="_blank" class="btn-pse">🏦 Pagar por PSE a Nequi {NUMERO_NEQUI_WHATSAPP}</a>
+            <a href="{wa_2}" target="_blank" class="btn-pay">📲 Ya transferí $24.900 • Activar Plan por WhatsApp</a>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
   with p3:
-    wa_3 = f"https://wa.me/{WHATSAPP_INTL}?text=Hola,%20acabo%20de%20pagar%20el%20Pase%20Convocatoria%20de%20$39.900%20(6%20meses)%20a%20Nequi%20{NUMERO_NEQUI_WHATSAPP}.%20Mi%20cedula%20es:%20"
+    wa_3 = f"https://wa.me/{WHATSAPP_INTL}?text=Hola,%20acabo%20de%20transferir%20el%20Pase%20Convocatoria%20de%20$39.900%20(6%20meses)%20a%20Nequi/Llave%20{NUMERO_NEQUI_WHATSAPP}.%20Adjunto%20comprobante.%20Mi%20cedula%20es:%20"
     st.markdown(
         f"""
         <div class="plan-card">
             <span class="eje-badge">👑 MÁXIMO AHORRO</span>
-            <h4 style="margin:10px 0 4px 0;">Pase Convocatoria (6 Meses)</h4>
+            <h4 style="margin:10px 0 4px 0;">Pase Semestral (6 Meses)</h4>
             <div class="plan-price">$39.900 <small style="font-size:13px; color:#64748b;">COP</small></div>
-            <p style="font-size:13px; color:#64748b;">Para concursar en múltiples entidades todo el semestre</p>
+            <p style="font-size:13px; color:#64748b;">Para concursar en múltiples convocatorias todo el semestre</p>
             <hr>
-            <div style="text-align:left; font-size:13.5px; line-height:1.7;">
+            <div style="text-align:left; font-size:13.5px; line-height:1.75;">
                 ✅ <b>180 días (6 meses)</b> de acceso total.<br>
-                ✅ Sirve para DIAN, Contraloría, CNSC y más.<br>
+                ✅ Válido para todas las convocatorias del país.<br>
                 ✅ Todos los modos aleatorios e integrales.<br>
                 ✅ Ahorras más del 70% frente al pase semanal.
             </div>
-            <a href="{wa_3}" target="_blank" class="btn-pay">📲 Pagar $39.900 y Pedir Código</a>
-            <a href="{URL_PSE_NEQUI}" target="_blank" class="btn-pse">🏦 Pagar por PSE a Nequi {NUMERO_NEQUI_WHATSAPP}</a>
+            <a href="{wa_3}" target="_blank" class="btn-pay">📲 Ya transferí $39.900 • Pedir Código por WhatsApp</a>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-  st.info(
-      f"💡 **¿Cómo activar tu plan en 1 minuto?**\n"
-      f"1. Transfiere el valor de tu plan a **Nequi `{NUMERO_NEQUI_WHATSAPP}`** (desde tu app Nequi, por **Transfiya/Bre-B** desde cualquier banco, o por **PSE** haciendo clic en el botón azul e ingresando el número `{NUMERO_NEQUI_WHATSAPP}`).\n"
-      f"2. Haz clic en el botón verde de **WhatsApp** para enviar tu comprobante y tu número de cédula.\n"
-      f"3. Recibirás al instante tu **Código PRO** para pegarlo en la barra lateral izquierda."
+  st.markdown(
+      f"""
+      <div class="nequi-box">
+          <h4 style="margin:0 0 6px 0;">💳 Pago Directo y Sin Comisiones (Nequi / Llave Bre-B / Transfiya)</h4>
+          <p style="font-size:18px; font-weight:800; margin:4px 0; color:#be185d;">📲 Número Nequi / Llave Celular: {NUMERO_NEQUI_WHATSAPP}</p>
+          <p style="font-size:13.5px; margin:6px 0 0 0;">
+              <b>Paso 1:</b> Envía el valor de tu plan al número <b>{NUMERO_NEQUI_WHATSAPP}</b> desde tu App Nequi, o desde <b>cualquier banco del país</b> usando <b>Transfiya / Llave Bre-B</b>.<br>
+              <b>Paso 2:</b> Haz clic en el botón verde del plan elegido para enviar tu comprobante y tu número de cédula por WhatsApp y recibir tu <b>Código PRO</b> al instante.
+          </p>
+      </div>
+      """,
+      unsafe_allow_html=True,
   )
 
 
@@ -978,11 +1072,11 @@ def renderizar_planes_de_pago():
 with tab_sim:
   if not api_key_user:
     st.info(
-        "👈 **Paso 1 para empezar:** Pega tu clave gratuita **`GEMINI_API_KEY`** en la barra lateral izquierda y presiona **Enter**."
+        "👈 **Paso 1 para empezar:** Pega tu clave gratuita **`GEMINI_API_KEY`** en la barra lateral izquierda y presiona **Enter** (abre la guía de 30 segundos ahí mismo si aún no tienes una)."
     )
   elif not nombres_manuales:
     st.warning(
-        "📂 **Paso 2 para empezar:** Sube el **Manual de Funciones o Ficha OPEC (PDF o TXT)** en la Sección 2 de la barra lateral izquierda."
+        f"📂 **Paso 2 para empezar:** Sube únicamente el **PDF del Manual de Funciones (OPEC)** de tu cargo en la Sección 2 de la barra izquierda. Tienes **{LIMITE_PREGUNTAS_GRATIS} preguntas gratis** para probar cómo la IA cruza tus funciones con la ley."
     )
   else:
     if not getattr(perfil_activo, "analizado_por_ia", False):
@@ -998,7 +1092,7 @@ with tab_sim:
     )
     if bloqueado:
       st.error(
-          f"🔒 Has completado tus {LIMITE_PREGUNTAS_GRATIS} preguntas de demostración gratuita. ¡Elige tu plan desde **$14.900 COP** para desbloquear preguntas y simulacros ilimitados!"
+          f"🔒 Has completado tus {LIMITE_PREGUNTAS_GRATIS} preguntas de demostración gratuita. ¡Activa tu Plan desde **$14.900 COP** al Nequi/Llave **{NUMERO_NEQUI_WHATSAPP}** para desbloquear preguntas y simulacros ilimitados!"
       )
       renderizar_planes_de_pago()
     else:
@@ -1018,10 +1112,10 @@ with tab_sim:
       if btn_lote:
         if not lic["activa"]:
           st.warning(
-              "🔒 El modo Simulacro Múltiple Cronometrado es exclusivo para usuarios con Plan Activo ($14.900 / $24.900). En el modo gratuito puedes usar el botón izquierdo de Práctica Individual."
+              "🔒 El modo Simulacro Múltiple Cronometrado es exclusivo para usuarios con Plan Activo ($14.900 / $24.900). En tu prueba gratuita de 5 preguntas utiliza el botón izquierdo de Modo Estudio."
           )
         else:
-          with st.spinner("Generando simulacro aleatorio basado en las funciones y ejes del cargo..."):
+          with st.spinner("Generando simulacro aleatorio cruzando tus funciones con la normativa vigente..."):
             lote = []
             vistos = set()
             for _ in range(cantidad_simulacro * 2):
@@ -1102,7 +1196,7 @@ with tab_sim:
             st.rerun()
       else:
         if btn_una:
-          with st.spinner("Construyendo caso práctico aleatorio acorde a tu manual..."):
+          with st.spinner("Construyendo caso práctico cruzando tu manual con la legislación colombiana..."):
             q_nueva = generar_pregunta_por_eje(
                 api_key_user, perfil_activo, modalidad_eje, item_especifico, dificultad
             )
@@ -1142,7 +1236,7 @@ with tab_sim:
           )
 
           if not st.session_state.q_respondida:
-            if st.button("✅ Validar Respuesta y Ver Justificación", type="primary"):
+            if st.button("✅ Validar Respuesta y Ver Justificación Jurídica", type="primary"):
               st.session_state.q_respondida = True
               st.session_state.total += 1
               if op_sel == q["correcta"]:
@@ -1165,25 +1259,28 @@ with tab_sim:
                 f"""
                 <div class="saas-card" style="background:#f8fafc; margin-top:12px; padding:16px;">
                     <b>💡 Tip Estratégico para el Examen:</b> {html.escape(q.get('tip_estrategico', 'Verifica siempre la competencia funcional y el verbo rector de la función esencial.'))}<br><br>
-                    <small style="color:#475569;"><b>📖 Sustento en el Manual ({html.escape(q.get('fuente',''))}):</b> <i>"{html.escape(q.get('fragmento_soporte',''))}"</i></small>
+                    <small style="color:#475569;"><b>📖 Sustento en tu Manual ({html.escape(q.get('fuente',''))}):</b> <i>"{html.escape(q.get('fragmento_soporte',''))}"</i></small>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
             if st.button("➡️ Siguiente Pregunta Aleatoria", type="primary"):
-              with st.spinner("Generando siguiente caso práctico..."):
-                q_sig = generar_pregunta_por_eje(
-                    api_key_user, perfil_activo, modalidad_eje, item_especifico, dificultad
-                )
-                if q_sig:
-                  st.session_state.q_actual = q_sig
-                  st.session_state.q_respondida = False
-                  st.session_state.usos_gratis += 1
-                  st.rerun()
+              if not lic["activa"] and st.session_state.usos_gratis >= LIMITE_PREGUNTAS_GRATIS:
+                st.rerun()
+              else:
+                with st.spinner("Generando siguiente caso práctico..."):
+                  q_sig = generar_pregunta_por_eje(
+                      api_key_user, perfil_activo, modalidad_eje, item_especifico, dificultad
+                  )
+                  if q_sig:
+                    st.session_state.q_actual = q_sig
+                    st.session_state.q_respondida = False
+                    st.session_state.usos_gratis += 1
+                    st.rerun()
         else:
           st.info(
-              "👆 Haz clic en el botón **'🎲 Generar Caso Situacional Aleatorio (Modo Estudio)'** arriba para comenzar tu entrenamiento."
+              "👆 Haz clic en el botón **'🎲 Generar Caso Situacional Aleatorio (Modo Estudio)'** arriba para comenzar tus 5 preguntas de prueba."
           )
 
 # ------------------------------------------
@@ -1230,7 +1327,7 @@ with tab_ficha:
 # ------------------------------------------
 with tab_comp:
   st.markdown("#### 🔄 Comparador Estratégico de Manuales de Funciones")
-  st.caption("Sube dos o más fichas OPEC en la barra lateral para compararlas lado a lado e identificar temas comunes de estudio.")
+  st.caption("Sube dos o más fichas OPEC en la barra lateral para compararlas lado a lado e identificar temas comunes de estudio antes de inscribirte.")
 
   if not nombres_manuales:
     st.info("📂 Aún no has subido manuales. Carga tus archivos PDF en la barra lateral izquierda para habilitar el comparador.")
@@ -1280,7 +1377,7 @@ with tab_comp:
       )
 
 # ------------------------------------------
-# PESTAÑA 4: PLANES Y PAGOS NEQUI / PSE
+# PESTAÑA 4: PLANES Y PAGOS NEQUI / LLAVE
 # ------------------------------------------
 with tab_planes:
   renderizar_planes_de_pago()
