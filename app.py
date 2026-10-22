@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 import pymupdf as fitz
 import streamlit as st
 from google import genai
+from google.genai import types
 
 # ==========================================
 # CONFIGURACIÓN COMERCIAL Y DE PAGOS (OMAR)
@@ -17,11 +18,11 @@ from google import genai
 NUMERO_NEQUI_WHATSAPP = "3108137030"
 WHATSAPP_INTL = f"57{NUMERO_NEQUI_WHATSAPP}"
 URL_PSE_NEQUI = "https://recarga.nequi.com.co/"
-CLAVE_MAESTRA_ADMIN = "OMAR2026"  # Cámbiala si deseas otra clave para tu generador de licencias
+CLAVE_MAESTRA_ADMIN = "OMAR2026"
 LIMITE_PREGUNTAS_GRATIS = 2
 
 # ==========================================
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS SAAS
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS SAAS PRO
 # ==========================================
 st.set_page_config(
     page_title="Mérito PRO | Simulador Inteligente de Concursos Públicos",
@@ -36,53 +37,73 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+    /* Banner Principal */
     .hero-box {
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 52%, #2563eb 100%);
         color: white;
-        padding: 26px 32px;
-        border-radius: 16px;
-        margin-bottom: 20px;
-        box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.25);
+        padding: 28px 34px;
+        border-radius: 18px;
+        margin-bottom: 18px;
+        box-shadow: 0 12px 28px -6px rgba(29, 78, 216, 0.3);
+        border: 1px solid rgba(255,255,255,0.12);
     }
     .hero-tag {
-        background: rgba(255, 255, 255, 0.16);
-        color: #bae6fd;
-        padding: 4px 12px;
+        background: rgba(255, 255, 255, 0.18);
+        color: #e0f2fe;
+        padding: 5px 14px;
         border-radius: 999px;
         font-size: 11.5px;
         font-weight: 700;
         text-transform: uppercase;
         display: inline-block;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+        letter-spacing: 0.4px;
     }
-    .hero-title { font-size: 26px; font-weight: 800; margin: 0 0 6px 0; color: #fff; }
-    .hero-sub { font-size: 14.5px; color: #e2e8f0; margin: 0; line-height: 1.5; }
+    .hero-title { font-size: 27px; font-weight: 800; margin: 0 0 8px 0; color: #fff; }
+    .hero-sub { font-size: 14.5px; color: #e2e8f0; margin: 0; line-height: 1.55; }
 
-    .kpi-box {
+    /* Guía rápida de 3 pasos */
+    .step-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 14px 18px;
-        text-align: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        padding: 12px 16px;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
     }
-    .kpi-num { font-size: 22px; font-weight: 800; color: #0f172a; margin: 2px 0; }
-    .kpi-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+    .step-ok { border-left: 5px solid #16a34a; background: #f0fdf4; }
+    .step-wait { border-left: 5px solid #f59e0b; background: #fffbeb; }
 
-    .saas-card {
+    /* KPIs */
+    .kpi-box {
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 14px;
-        padding: 22px;
+        padding: 15px 18px;
+        text-align: center;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    }
+    .kpi-num { font-size: 23px; font-weight: 800; color: #0f172a; margin: 2px 0; }
+    .kpi-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+
+    /* Tarjetas de contenido */
+    .saas-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 24px;
         margin-bottom: 16px;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
         color: #1e293b;
     }
     .eje-badge {
         background: #eff6ff;
         color: #1d4ed8;
         border: 1px solid #bfdbfe;
-        padding: 4px 11px;
+        padding: 5px 12px;
         border-radius: 999px;
         font-size: 12px;
         font-weight: 600;
@@ -93,7 +114,7 @@ st.markdown(
         background: #fef3c7;
         color: #b45309;
         border: 1px solid #fde68a;
-        padding: 4px 11px;
+        padding: 5px 12px;
         border-radius: 999px;
         font-size: 12px;
         font-weight: 700;
@@ -102,37 +123,37 @@ st.markdown(
     .enunciado-box {
         background: #f8fafc;
         border-left: 5px solid #2563eb;
-        padding: 18px;
-        font-size: 15.5px;
+        padding: 20px;
+        font-size: 16px;
         font-weight: 600;
         color: #0f172a;
-        border-radius: 0 10px 10px 0;
-        margin: 14px 0;
-        line-height: 1.6;
+        border-radius: 0 12px 12px 0;
+        margin: 16px 0;
+        line-height: 1.65;
     }
     .feedback-ok {
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
         border-left: 6px solid #16a34a;
-        padding: 16px;
-        border-radius: 10px;
-        margin-top: 12px;
+        padding: 18px;
+        border-radius: 12px;
+        margin-top: 14px;
         color: #14532d;
     }
     .feedback-err {
         background: #fef2f2;
         border: 1px solid #fecaca;
         border-left: 6px solid #dc2626;
-        padding: 16px;
-        border-radius: 10px;
-        margin-top: 12px;
+        padding: 18px;
+        border-radius: 12px;
+        margin-top: 14px;
         color: #7f1d1d;
     }
     .plan-card {
         background: #ffffff;
         border: 2px solid #e2e8f0;
         border-radius: 16px;
-        padding: 22px;
+        padding: 24px;
         text-align: center;
         height: 100%;
         box-shadow: 0 4px 15px rgba(0,0,0,0.04);
@@ -141,18 +162,18 @@ st.markdown(
         background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
         border: 2px solid #2563eb;
         border-radius: 16px;
-        padding: 22px;
+        padding: 24px;
         text-align: center;
         height: 100%;
-        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.15);
+        box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16);
     }
-    .plan-price { font-size: 32px; font-weight: 800; color: #1d4ed8; margin: 8px 0; }
+    .plan-price { font-size: 34px; font-weight: 800; color: #1d4ed8; margin: 8px 0; }
     .btn-pay {
         display: block;
         background: #16a34a;
         color: white !important;
         font-weight: 700;
-        padding: 10px 16px;
+        padding: 11px 16px;
         border-radius: 10px;
         text-decoration: none;
         margin-top: 12px;
@@ -163,7 +184,7 @@ st.markdown(
         background: #1e40af;
         color: white !important;
         font-weight: 700;
-        padding: 10px 16px;
+        padding: 11px 16px;
         border-radius: 10px;
         text-decoration: none;
         margin-top: 8px;
@@ -175,7 +196,7 @@ st.markdown(
 )
 
 # ==========================================
-# ESTRUCTURAS DE DATOS (SIN MANUALES PRECARGADOS)
+# ESTRUCTURAS DE DATOS
 # ==========================================
 
 
@@ -199,6 +220,7 @@ class PerfilManual:
   competencias_funcionales: List[str] = field(default_factory=list)
   competencias_comportamentales: List[str] = field(default_factory=list)
   requisitos: str = ""
+  analizado_por_ia: bool = False
 
 
 def construir_texto_desde_perfil(p: PerfilManual) -> str:
@@ -213,15 +235,19 @@ def construir_texto_desde_perfil(p: PerfilManual) -> str:
   )
 
 
-# Inicialización de Estado Limpia (Cada usuario carga sus propios manuales)
+# Inicialización de Estado Limpia
 if "perfiles" not in st.session_state:
   st.session_state.perfiles = {}
 if "manuales_texto" not in st.session_state:
   st.session_state.manuales_texto = {}
+if "manuales_bytes" not in st.session_state:
+  st.session_state.manuales_bytes = {}
 if "paginas" not in st.session_state:
   st.session_state.paginas = []
 if "uploader_key" not in st.session_state:
   st.session_state.uploader_key = 0
+if "ultimo_error_ia" not in st.session_state:
+  st.session_state.ultimo_error_ia = ""
 if "puntaje" not in st.session_state:
   st.session_state.puntaje = 0
 if "total" not in st.session_state:
@@ -241,7 +267,12 @@ if "examen_res" not in st.session_state:
 if "examen_t0" not in st.session_state:
   st.session_state.examen_t0 = 0.0
 
-MODELOS_GEMINI = ["gemini-2.5-flash", "gemini-2.5-pro"]
+MODELOS_GEMINI = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-pro",
+]
 
 # ==========================================
 # SISTEMA DE LICENCIAS CON FECHA DE VENCIMIENTO
@@ -281,28 +312,41 @@ def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
 
 
 # ==========================================
-# FUNCIONES DE IA Y EXTRACCIÓN DE MANUALES
+# MOTOR MULTIMODAL DE IA (LEE TEXTO Y PDF ESCANEADO)
 # ==========================================
 
 
-def llamar_gemini(client, prompt: str) -> Optional[str]:
+def llamar_gemini(
+    client, prompt: str, pdf_bytes: Optional[bytes] = None
+) -> Optional[str]:
   if not client:
     return None
+  st.session_state.ultimo_error_ia = ""
+
   for mod in MODELOS_GEMINI:
-    for intento in range(2):
-      try:
+    try:
+      if pdf_bytes and len(pdf_bytes) < 18 * 1024 * 1024:
+         doc_part = types.Part.from_bytes(
+             data=pdf_bytes, mime_type="application/pdf"
+         )
+         r = client.models.generate_content(
+             model=mod, contents=[doc_part, prompt]
+         )
+      else:
         r = client.models.generate_content(model=mod, contents=prompt)
-        if r and r.text:
-          return r.text
-      except Exception as e:
-        msg = str(e).lower()
-        if "429" in msg or "quota" in msg or "resource_exhausted" in msg:
-          st.warning("⚠️ Tu clave de API alcanzó el límite de velocidad por minuto. Espera 20 segundos y vuelve a intentar.")
-          return None
-        if intento == 0:
-          time.sleep(1.2)
-          continue
+
+      if r and r.text:
+        return r.text
+    except Exception as e:
+      err_str = str(e)
+      st.session_state.ultimo_error_ia = err_str
+      msg = err_str.lower()
+      if "api_key_invalid" in msg or "invalid api key" in msg or "unauthenticated" in msg:
         break
+      if "429" in msg or "quota" in msg or "resource_exhausted" in msg:
+        time.sleep(1.0)
+        continue
+      continue
   return None
 
 
@@ -312,7 +356,12 @@ def extraer_pdf(nombre: str, datos: bytes) -> Tuple[str, List[Pagina]]:
   try:
     doc = fitz.open(stream=datos, filetype="pdf")
     for i in range(len(doc)):
-      t = doc[i].get_text("text").strip()
+      # Extraer por bloques ordenados para mejorar lectura de tablas
+      bloques = doc[i].get_text("blocks")
+      bloques.sort(key=lambda b: (round(b[1], 1), round(b[0], 1)))
+      t = "\n".join(b[4].strip() for b in bloques if len(b) > 4 and str(b[4]).strip())
+      if not t:
+        t = doc[i].get_text("text").strip()
       if t:
         pags.append(Pagina(nombre, i + 1, t))
         full_txt += f"\n--- PÁGINA {i+1} ---\n" + t
@@ -323,29 +372,33 @@ def extraer_pdf(nombre: str, datos: bytes) -> Tuple[str, List[Pagina]]:
     return "", []
 
 
-def analizar_manual_universal(client, nombre_archivo: str, texto: str) -> PerfilManual:
-  muestra = texto[:28000]
+def analizar_manual_universal(
+    client, nombre_archivo: str, texto: str, pdf_bytes: Optional[bytes] = None
+) -> PerfilManual:
+  muestra = texto[:25000]
   prompt = f"""
-  Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, DIAN, Contraloría, Alcaldías, Gobernaciones, Entidades Nacionales).
+  Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (DIAN, CNSC, Contraloría, Alcaldías, Gobernaciones, Entidades Nacionales).
 
-  Analiza el siguiente Manual de Funciones y extrae toda su estructura con total fidelidad:
+  Analiza visualmente y textualmente el documento adjunto (incluso si viene en tablas como el formato FT-TAH-1824 de la DIAN o resoluciones de Contraloría/CNSC) y extrae TODA su estructura con total fidelidad.
+
+  Texto auxiliar detectado:
   {muestra}
 
   DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO (sin bloques markdown):
   {{
-    "entidad": "Nombre de la entidad pública (ej. DIAN, Contraloría, Alcaldía, etc.)",
+    "entidad": "Nombre de la entidad pública (ej. DIAN, Contraloría de Bogotá, Alcaldía, etc.)",
     "cargo": "Denominación exacta del empleo (ej. Gestor I, Secretario, Profesional Universitario)",
-    "codigo_grado": "Código, Grado y Ficha si aparece (ej. Código 301 Grado 01)",
-    "nivel": "Nivel jerárquico y proceso o dependencia (ej. Profesional / Fiscalización)",
-    "proposito": "Propósito principal del empleo textual o resumido con precisión",
-    "funciones_esenciales": ["Función 1...", "Función 2...", "Función 3..."],
-    "conocimientos_ejes": ["Eje o conocimiento básico 1...", "Conocimiento 2..."],
+    "codigo_grado": "Código, Grado y Ficha (ej. Código 301 - Grado 01 | Ficha AT-FL-3008)",
+    "nivel": "Nivel jerárquico y proceso/dependencia (ej. Nivel Profesional - Fiscalización y Liquidación)",
+    "proposito": "Propósito principal completo y exacto del empleo",
+    "funciones_esenciales": ["1. ...", "2. ...", "3. ..."],
+    "conocimientos_ejes": ["Conocimiento o eje temático 1...", "Conocimiento 2..."],
     "competencias_funcionales": ["Competencia funcional 1...", "Competencia funcional 2..."],
     "competencias_comportamentales": ["Competencia comportamental 1...", "Competencia 2..."],
-    "requisitos": "Requisitos de estudio y experiencia"
+    "requisitos": "Requisitos completos de estudio (NBC/Títulos) y experiencia"
   }}
   """
-  raw = llamar_gemini(client, prompt)
+  raw = llamar_gemini(client, prompt, pdf_bytes=pdf_bytes)
   if raw:
     try:
       limpio = re.sub(r"```(?:json)?", "", raw.strip())
@@ -356,40 +409,41 @@ def analizar_manual_universal(client, nombre_archivo: str, texto: str) -> Perfil
       d = json.loads(limpio)
       return PerfilManual(
           nombre_archivo=nombre_archivo,
-          entidad=d.get("entidad") or "Entidad Pública",
+          entidad=d.get("entidad") or "Entidad Pública Oficial",
           cargo=d.get("cargo") or nombre_archivo,
-          codigo_grado=d.get("codigo_grado") or "OPEC / Manual Activo",
+          codigo_grado=d.get("codigo_grado") or "Ficha OPEC Activa",
           nivel=d.get("nivel") or "Carrera Administrativa",
           proposito=d.get("proposito") or "Cumplir las funciones asignadas al cargo según el manual.",
-          funciones_esenciales=d.get("funciones_esenciales") or ["Funciones integrales contenidas en el manual cargado."],
-          conocimientos_ejes=d.get("conocimientos_ejes") or ["Normativa y conocimientos básicos del empleo."],
-          competencias_funcionales=d.get("competencias_funcionales") or ["Aplicación de procedimientos técnicos y misionales del cargo."],
-          competencias_comportamentales=d.get("competencias_comportamentales") or ["Comportamiento ético, compromiso, adaptabilidad y trabajo en equipo."],
+          funciones_esenciales=d.get("funciones_esenciales") or ["Funciones integrales del empleo cargado."],
+          conocimientos_ejes=d.get("conocimientos_ejes") or ["Normativa y ejes temáticos del empleo."],
+          competencias_funcionales=d.get("competencias_funcionales") or ["Competencias funcionales técnicas del cargo."],
+          competencias_comportamentales=d.get("competencias_comportamentales") or ["Comportamiento ético, trabajo en equipo y adaptabilidad."],
           requisitos=d.get("requisitos") or "Según manual de funciones cargado.",
+          analizado_por_ia=True,
       )
     except Exception:
       pass
 
-  # Perfil de respaldo automático si el documento tiene un formato libre
+  # Si aún no pudo conectar con la IA, deja marcado analizado_por_ia=False para reintentar
   return PerfilManual(
       nombre_archivo=nombre_archivo,
-      entidad="Documento Oficial Cargado",
+      entidad="Documento Cargado (Pendiente Análisis IA)",
       cargo=nombre_archivo.replace(".pdf", "").replace(".txt", ""),
-      codigo_grado="Manual Activo",
+      codigo_grado="Presiona 'Re-analizar con IA' en la barra lateral",
       nivel="Concurso de Méritos",
-      proposito=texto[:350].replace("\n", " ") + "...",
-      funciones_esenciales=["Funciones extraídas directamente del documento cargado."],
-      conocimientos_ejes=["Ejes temáticos y normativa del documento cargado."],
-      competencias_funcionales=["Competencias funcionales del cargo."],
-      competencias_comportamentales=["Juicio situacional y competencias comportamentales del nivel."],
-      requisitos="Ver detalle en el documento cargado.",
+      proposito="Verifica que tu GEMINI_API_KEY sea una clave válida de Google AI Studio (suele iniciar por AIzaSy...) y haz clic en '🔄 Re-analizar Manual con IA' en la barra lateral.",
+      funciones_esenciales=["Pendiente de extracción con IA (verifica tu clave API)."],
+      conocimientos_ejes=["Pendiente de extracción con IA."],
+      competencias_funcionales=["Pendiente de extracción con IA."],
+      competencias_comportamentales=["Pendiente de extracción con IA."],
+      requisitos="Pendiente de extracción con IA.",
+      analizado_por_ia=False,
   )
 
 
 def generar_pregunta_por_eje(
     client, perfil: PerfilManual, modalidad_eje: str, item_especifico: str, dificultad: str
 ) -> Optional[dict]:
-  # Selección inteligente o aleatoria del eje a evaluar
   if modalidad_eje.startswith("🎲 Aleatoria Integral"):
     categorias = [
         ("FUNCIÓN ESENCIAL DEL CARGO", perfil.funciones_esenciales),
@@ -421,9 +475,12 @@ def generar_pregunta_por_eje(
   else:
     foco_evaluacion = f"ENFOQUE ESPECÍFICO: {item_especifico}"
 
-  texto_manual = st.session_state.manuales_texto.get(
-      perfil.nombre_archivo, construir_texto_desde_perfil(perfil)
-  )[:8000]
+  texto_contexto = (
+      construir_texto_desde_perfil(perfil)
+      + "\n\n"
+      + st.session_state.manuales_texto.get(perfil.nombre_archivo, "")[:6000]
+  )
+  pdf_bytes = st.session_state.manuales_bytes.get(perfil.nombre_archivo)
 
   prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Contraloría, Universidad Libre, UNAL, ESAP).
 
@@ -433,20 +490,20 @@ PROPÓSITO PRINCIPAL: {perfil.proposito}
 EJE SELECCIONADO PARA ESTA PREGUNTA: {foco_evaluacion}
 DIFICULTAD: {dificultad}
 
-TEXTO DEL MANUAL DE FUNCIONES DE REFERENCIA:
-{texto_manual}
+ESTRUCTURA DEL MANUAL DE FUNCIONES:
+{texto_contexto}
 
 INSTRUCCIONES DE DISEÑO:
-1. Crea un CASO SITUACIONAL REALISTA ubicado en la oficina o dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental directamente relacionado con el EJE SELECCIONADO ({foco_evaluacion}).
-2. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) redactadas con estilo oficial de prueba CNSC.
-3. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles (errores comunes de procedimiento, vencimiento de términos o conductas que incumplen el nivel de la competencia).
+1. Crea un CASO SITUACIONAL REALISTA ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental directamente relacionado con el EJE SELECCIONADO ({foco_evaluacion}).
+2. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
+3. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
 4. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida y por qué se descartan las demás.
 5. En "fragmento_soporte", cita la función, competencia o conocimiento del manual que respalda la pregunta.
 
 DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin markdown):
 {{"eje_evaluado":"{foco_evaluacion[:90]}","pregunta":"...","opciones":{{"A":"...","B":"...","C":"...","D":"..."}},"correcta":"A","explicacion":"...","tip_estrategico":"...","fuente":"{perfil.nombre_archivo}","fragmento_soporte":"..."}}"""
 
-  raw = llamar_gemini(client, prompt)
+  raw = llamar_gemini(client, prompt, pdf_bytes=pdf_bytes)
   if not raw:
     return None
   try:
@@ -469,7 +526,6 @@ DEVUELVE ÚNICAMENTE JSON VÁLIDO (sin markdown):
 # ==========================================
 st.sidebar.markdown("## 🏛️ Mérito PRO Colombia")
 
-# Estado de Suscripción
 lic = st.session_state.licencia_info
 if lic["activa"]:
   st.sidebar.success(
@@ -481,26 +537,26 @@ else:
       f"🎁 **Modo Prueba Gratis:** Te quedan **{disp}** de {LIMITE_PREGUNTAS_GRATIS} preguntas de demostración."
   )
 
-# 1. Configuración Segura de API Key por cada Usuario (BYOK)
+# 1. Configuración de Clave IA
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔑 1. Tu Clave Gratuita de IA")
 api_key_user = st.sidebar.text_input(
     "Pega tu GEMINI_API_KEY personal:",
     type="password",
-    help="Cada estudiante utiliza su propia clave gratuita de Google AI Studio. Tu clave es 100% privada en tu navegador.",
+    help="Pega tu clave de Google AI Studio y presiona Enter.",
 )
 with st.sidebar.expander("❓ ¿Cómo obtener mi clave GRATIS en 30 seg?"):
   st.markdown(
       """
-      1. Entra gratis a [**Google AI Studio (Clic aquí)**](https://aistudio.google.com/apikey) con tu correo de Gmail.
-      2. Haz clic en el botón azul **"Create API key"**.
-      3. Copia el código generado y pégalo arriba. ¡Es 100% gratis!
+      1. Entra gratis a [**Google AI Studio (Clic aquí)**](https://aistudio.google.com/apikey) con tu cuenta de Gmail.
+      2. Haz clic en **"Create API key"**.
+      3. Copia la clave generada y pégala arriba.
       """
   )
 
 client = genai.Client(api_key=api_key_user.strip()) if api_key_user.strip() else None
 
-# 2. Carga y Selección de Manual de Funciones
+# 2. Carga de Manuales con Visión Multimodal
 st.sidebar.markdown("---")
 st.sidebar.subheader("📂 2. Sube tu Manual de Funciones")
 archivos_up = st.sidebar.file_uploader(
@@ -516,27 +572,32 @@ if archivos_up:
       b_data = arc.read()
       if arc.name.lower().endswith(".pdf"):
         txt_doc, pags = extraer_pdf(arc.name, b_data)
+        st.session_state.manuales_bytes[arc.name] = b_data
       else:
         txt_doc = b_data.decode("utf-8", errors="ignore")
         pags = [Pagina(arc.name, 1, txt_doc)]
 
-      if txt_doc.strip():
-        st.session_state.manuales_texto[arc.name] = txt_doc
-        st.session_state.paginas.extend(pags)
+      st.session_state.manuales_texto[arc.name] = txt_doc or "Documento PDF"
+      st.session_state.paginas.extend(pags)
 
-# Perfilado automático de cualquier documento subido apenas exista API Key válida
-archivos_sin_perfil = [
-    k for k in st.session_state.manuales_texto.keys() if k not in st.session_state.perfiles
+# Perfilar automáticamente si hay archivos sin análisis de IA y ya existe cliente
+archivos_pendientes = [
+    k
+    for k in st.session_state.manuales_texto.keys()
+    if (k not in st.session_state.perfiles) or (not st.session_state.perfiles[k].analizado_por_ia)
 ]
-if archivos_sin_perfil:
-  if client:
-    for k_pend in archivos_sin_perfil:
-      with st.spinner(f"Analizando estructura de {k_pend} con IA..."):
-        nuevo_p = analizar_manual_universal(client, k_pend, st.session_state.manuales_texto[k_pend])
-        st.session_state.perfiles[k_pend] = nuevo_p
+if archivos_pendientes and client:
+  for k_pend in archivos_pendientes:
+    with st.spinner(f"🔍 Leyendo tablas y funciones de {k_pend} con Visión IA..."):
+      nuevo_p = analizar_manual_universal(
+          client,
+          k_pend,
+          st.session_state.manuales_texto[k_pend],
+          pdf_bytes=st.session_state.manuales_bytes.get(k_pend),
+      )
+      st.session_state.perfiles[k_pend] = nuevo_p
+      if nuevo_p.analizado_por_ia:
         st.sidebar.success(f"✅ Cargo detectado: {nuevo_p.cargo}")
-  else:
-    st.sidebar.info("📄 Archivo recibido. Pega arriba tu GEMINI_API_KEY para analizarlo automáticamente.")
 
 nombres_manuales = list(st.session_state.perfiles.keys())
 
@@ -548,14 +609,28 @@ if nombres_manuales:
   )
   perfil_activo = st.session_state.perfiles[manual_activo_key]
 
-  if st.sidebar.button("🗑️ Limpiar / Cambiar Manuales", use_container_width=True):
-    st.session_state.perfiles = {}
-    st.session_state.manuales_texto = {}
-    st.session_state.paginas = []
-    if "q_actual" in st.session_state:
-      del st.session_state.q_actual
-    st.session_state.uploader_key += 1
-    st.rerun()
+  c_b1, c_b2 = st.sidebar.columns(2)
+  with c_b1:
+    if st.button("🔄 Re-analizar IA", use_container_width=True):
+      if client:
+        with st.spinner("Re-analizando documento con Visión IA..."):
+          st.session_state.perfiles[manual_activo_key] = analizar_manual_universal(
+              client,
+              manual_activo_key,
+              st.session_state.manuales_texto[manual_activo_key],
+              pdf_bytes=st.session_state.manuales_bytes.get(manual_activo_key),
+          )
+          st.rerun()
+  with c_b2:
+    if st.button("🗑️ Limpiar PDF", use_container_width=True):
+      st.session_state.perfiles = {}
+      st.session_state.manuales_texto = {}
+      st.session_state.manuales_bytes = {}
+      st.session_state.paginas = []
+      if "q_actual" in st.session_state:
+        del st.session_state.q_actual
+      st.session_state.uploader_key += 1
+      st.rerun()
 else:
   st.sidebar.warning("⚠️ Sube tu Manual de Funciones (PDF o TXT) para comenzar.")
   perfil_activo = PerfilManual(
@@ -564,10 +639,11 @@ else:
       cargo="Sube tu Manual de Funciones en PDF",
       codigo_grado="Sin archivo cargado",
       nivel="Cualquier Concurso de Méritos",
-      proposito="Sube el Manual de Funciones o Ficha OPEC de tu cargo en la barra lateral izquierda (Sección 2) para extraer automáticamente tus funciones esenciales, ejes temáticos y competencias.",
+      proposito="Sube el Manual de Funciones o Ficha OPEC de tu cargo en la barra lateral izquierda (Sección 2). Nuestro motor con Visión IA leerá automáticamente tus funciones esenciales, ejes temáticos y competencias.",
+      analizado_por_ia=False,
   )
 
-# 3. Selector de Ejes de Entrenamiento
+# 3. Modo de Entrenamiento
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎯 3. Modo de Entrenamiento")
 modalidad_eje = st.sidebar.selectbox(
@@ -591,8 +667,6 @@ if modalidad_eje.startswith("🔍"):
   )
   if todos_los_items:
     item_especifico = st.sidebar.selectbox("Selecciona el ítem exacto:", todos_los_items)
-  else:
-    st.sidebar.caption("Sube primero un manual para ver la lista de funciones y ejes.")
 
 dificultad = st.sidebar.select_slider(
     "Nivel de Dificultad",
@@ -601,7 +675,7 @@ dificultad = st.sidebar.select_slider(
 )
 cantidad_simulacro = st.sidebar.selectbox("Preguntas por Simulacro", [3, 5, 10, 20], index=1)
 
-# 4. Activación de Licencia del Cliente y Panel Admin de Omar
+# 4. Licencias y Panel Admin
 st.sidebar.markdown("---")
 with st.sidebar.expander("🔐 Activar mi Código PRO (Clientes)"):
   ced_cli = st.text_input("Tu Número de Cédula:", key="input_ced_cli")
@@ -642,8 +716,33 @@ with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
       st.caption("Copia y envíale este código a tu cliente por WhatsApp.")
 
 # ==========================================
-# CABECERA PRINCIPAL Y KPIS
+# GUÍA VISUAL DE 3 PASOS + CABECERA PRINCIPAL
 # ==========================================
+s1, s2, s3 = st.columns(3)
+with s1:
+  cls1 = "step-ok" if client else "step-wait"
+  ico1 = "✅" if client else "1️⃣"
+  st.markdown(
+      f'<div class="step-card {cls1}"><div><b>{ico1} Paso 1: Clave IA</b><br><small>{"Conectada y lista" if client else "Pega tu GEMINI_API_KEY a la izquierda"}</small></div></div>',
+      unsafe_allow_html=True,
+  )
+with s2:
+  ok_man = bool(nombres_manuales and perfil_activo.analizado_por_ia)
+  cls2 = "step-ok" if ok_man else "step-wait"
+  ico2 = "✅" if ok_man else "2️⃣"
+  st.markdown(
+      f'<div class="step-card {cls2}"><div><b>{ico2} Paso 2: Manual OPEC</b><br><small>{html.escape(perfil_activo.cargo[:32]) if ok_man else "Sube tu PDF en la barra izquierda"}</small></div></div>',
+      unsafe_allow_html=True,
+  )
+with s3:
+  ok_todo = bool(client and ok_man)
+  cls3 = "step-ok" if ok_todo else "step-wait"
+  ico3 = "🚀" if ok_todo else "3️⃣"
+  st.markdown(
+      f'<div class="step-card {cls3}"><div><b>{ico3} Paso 3: Entrenar</b><br><small>{"¡Listo para generar preguntas!" if ok_todo else "Completa los pasos 1 y 2"}</small></div></div>',
+      unsafe_allow_html=True,
+  )
+
 st.markdown(
     f"""
 <div class="hero-box">
@@ -678,9 +777,11 @@ with k3:
       + len(perfil_activo.conocimientos_ejes)
       + len(perfil_activo.competencias_funcionales)
       + len(perfil_activo.competencias_comportamentales)
+      if nombres_manuales
+      else 0
   )
   st.markdown(
-      f'<div class="kpi-box"><div class="kpi-label">Funciones y Ejes del Cargo</div><div class="kpi-num">{total_items_manual}</div></div>',
+      f'<div class="kpi-box"><div class="kpi-label">Funciones y Ejes Detectados</div><div class="kpi-num">{total_items_manual}</div></div>',
       unsafe_allow_html=True,
   )
 with k4:
@@ -803,13 +904,18 @@ def renderizar_planes_de_pago():
 with tab_sim:
   if not client:
     st.info(
-        "👈 **Paso 1 para empezar:** Pega tu clave gratuita **`GEMINI_API_KEY`** en la barra lateral izquierda (tienes una guía desplegable de 30 segundos ahí mismo si aún no tienes una)."
+        "👈 **Paso 1 para empezar:** Pega tu clave gratuita **`GEMINI_API_KEY`** en la barra lateral izquierda y presiona **Enter**."
     )
   elif not nombres_manuales:
     st.warning(
-        "📂 **Paso 2 para empezar:** Sube el **Manual de Funciones o Ficha OPEC (PDF o TXT)** en la Sección 2 de la barra lateral izquierda. La IA extraerá automáticamente las funciones, ejes temáticos y competencias de tu cargo."
+        "📂 **Paso 2 para empezar:** Sube el **Manual de Funciones o Ficha OPEC (PDF o TXT)** en la Sección 2 de la barra lateral izquierda. La Visión IA extraerá automáticamente el cargo, propósito, funciones esenciales y competencias."
     )
   else:
+    if not perfil_activo.analizado_por_ia and st.session_state.ultimo_error_ia:
+      st.warning(
+          f"⚠️ **Aviso de conexión con tu Clave API:** No se pudo conectar con Google AI Studio (`{st.session_state.ultimo_error_ia[:140]}`). Verifica que hayas copiado bien tu clave en la barra lateral y haz clic en el botón **'🔄 Re-analizar IA'**."
+      )
+
     bloqueado = (
         not lic["activa"]
         and st.session_state.usos_gratis >= LIMITE_PREGUNTAS_GRATIS
@@ -930,7 +1036,10 @@ with tab_sim:
               if btn_una or st.session_state.usos_gratis == 0:
                 st.session_state.usos_gratis += 1
             else:
-              st.error("No se pudo generar la pregunta. Verifica que tu GEMINI_API_KEY sea válida.")
+              det = st.session_state.ultimo_error_ia
+              st.error(
+                  f"No se pudo generar la pregunta. Detalle técnico: {det[:180] if det else 'Verifica que tu GEMINI_API_KEY sea válida en Google AI Studio.'}"
+              )
               st.stop()
 
         if "q_actual" in st.session_state:
