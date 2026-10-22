@@ -24,7 +24,7 @@ LIMITE_PREGUNTAS_GRATIS = 2
 # CONFIGURACIÓN DE PÁGINA Y ESTILOS SAAS
 # ==========================================
 st.set_page_config(
-    page_title="Mérito PRO | Simulador Inteligente CNSC, DIAN y Contraloría",
+    page_title="Mérito PRO | Simulador Inteligente de Concursos Públicos",
     page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -175,7 +175,7 @@ st.markdown(
 )
 
 # ==========================================
-# ESTRUCTURAS DE DATOS Y MANUALES PRECARGADOS
+# ESTRUCTURAS DE DATOS (SIN MANUALES PRECARGADOS)
 # ==========================================
 
 
@@ -201,98 +201,6 @@ class PerfilManual:
   requisitos: str = ""
 
 
-# Base precargada con los 2 Manuales Reales (DIAN y Contraloría)
-PERFILES_PRECARGADOS: Dict[str, PerfilManual] = {
-    "MANUAL_DIAN_Gestor_I_301_01.pdf": PerfilManual(
-        nombre_archivo="MANUAL_DIAN_Gestor_I_301_01.pdf",
-        entidad="DIAN (Dirección de Impuestos y Aduanas Nacionales)",
-        cargo="Gestor I",
-        codigo_grado="Código 301 - Grado 01 (Ficha AT-FL-3008)",
-        nivel="Nivel Profesional - Proceso Misional: Fiscalización y Liquidación",
-        proposito=(
-            "Ejecutar, en el marco de su competencia y jurisdicción, investigaciones, acciones,"
-            " diligencias y trámites dirigidos a la verificación del cumplimiento de las obligaciones"
-            " en materia tributaria, aduanera o cambiaria, así como la detección de prácticas"
-            " tendientes a la elusión, evasión, abuso, contrabando y lavado de activos, de acuerdo"
-            " con la normativa vigente, los procedimientos establecidos y las directrices institucionales."
-        ),
-        funciones_esenciales=[
-            "1. Realizar investigaciones para determinar el cumplimiento de obligaciones tributarias, aduaneras o cambiarias y el reporte de operaciones sospechosas de lavado de activos y financiación del terrorismo.",
-            "2. Proferir los actos administrativos de trámite, preparatorios y de fondo requeridos dentro del proceso de fiscalización y liquidación.",
-            "3. Participar en la ejecución de acciones de fiscalización tendientes a la verificación del cumplimiento de obligaciones tributarias, aduaneras o cambiarias.",
-            "4. Planificar la logística para la ejecución de acciones de control de tal forma que permita alcanzar los resultados esperados.",
-            "5. Elaborar informes estadísticos y de gestión requeridos de acuerdo con procedimientos y directrices institucionales.",
-            "6. Participar en las diligencias de destrucción de mercancía averiada, defectuosa o impropia respecto del fin para el cual fue importada.",
-        ],
-        conocimientos_ejes=[
-            "Conceptos de Evasión, Elusión y Contrabando; Ley de Transparencia",
-            "Gestión Documental y Modelo Integrado de Planeación y Gestión (MIPG)",
-            "Código de Buen Gobierno y Código de Integridad",
-            "Principios de la Función Pública y Procedimiento Administrativo General (Ley 1437 de 2011 - CPACA)",
-            "Sistema PQRSF y Políticas estatales de servicio al ciudadano",
-            "Constitución Política: Derechos Fundamentales, Principios y Estructura del Estado",
-            "Generalidades del sistema tributario, aduanero y cambiario e introducción al proceso de fiscalización y liquidación",
-        ],
-        competencias_funcionales=[
-            "La determinación y el control tributario",
-            "Régimen cambiario en las operaciones de cambio de competencia de la DIAN",
-            "La fiscalización internacional",
-            "Fiscalización aduanera",
-        ],
-        competencias_comportamentales=[
-            "Comportamiento Ético (Nivel 4)",
-            "Trabajo en Equipo (Nivel 3)",
-            "Comunicación Efectiva (Nivel 2)",
-            "Adaptabilidad (Nivel 2)",
-            "Orientación al Logro y Orientación al usuario y al ciudadano",
-        ],
-        requisitos=(
-            "Título profesional en NBC: Administración, Contaduría Pública, Derecho, Economía,"
-            " Ingeniería Industrial, Sistemas, Química, Matemáticas/Estadística o Ciencia Política."
-            " No requiere experiencia."
-        ),
-    ),
-    "MANUAL_CONTRALORIA_Secretario_440_07.pdf": PerfilManual(
-        nombre_archivo="MANUAL_CONTRALORIA_Secretario_440_07.pdf",
-        entidad="Contraloría de Bogotá D.C. (Resolución 003 de 2021)",
-        cargo="Secretario",
-        codigo_grado="Código 440 - Grado 07",
-        nivel="Nivel Asistencial - Despacho del Contralor Auxiliar, Direcciones y Subdirecciones",
-        proposito=(
-            "Realizar labores de apoyo administrativo y asistir al jefe inmediato en las labores"
-            " secretariales conforme a sus instrucciones, en términos de calidad y oportunidad para"
-            " el correcto funcionamiento de la dependencia."
-        ),
-        funciones_esenciales=[
-            "1. Radicar, distribuir y hacer seguimiento al cumplimiento de los términos de las peticiones recibidas y tramitadas en la dependencia.",
-            "2. Organizar y archivar los registros documentales que hagan parte de la dependencia, según los procedimientos y normas de archivo vigentes.",
-            "3. Atender a los clientes internos y externos de la entidad con eficiencia, suministrando información veraz y oportuna.",
-            "4. Efectuar la recepción, organización, seguimiento y entrega de bienes y elementos para asegurar el control del inventario a cargo de la dependencia.",
-            "5. Elaborar oficios, memorandos y demás documentos derivados de las obligaciones institucionales propias de la dependencia.",
-            "6. Agendar, organizar, coordinar e informar al superior inmediato las reuniones de carácter oficial en las que deba participar.",
-        ],
-        conocimientos_ejes=[
-            "Constitución Política de Colombia",
-            "Normas sobre la organización y funcionamiento de la Contraloría",
-            "Técnicas de oficina y Herramientas ofimáticas",
-            "Normatividad en materia de archivo y gestión documental",
-            "Normatividad en materia de inventarios y control de bienes",
-            "Sistema Integrado de Gestión (SIG)",
-        ],
-        competencias_funcionales=[
-            "Gestión y seguimiento de términos de Derechos de Petición (PQRSD)",
-            "Organización de archivos de gestión y tablas de retención documental",
-            "Control de inventarios, recepción de bienes y redacción de documentos oficiales (oficios y memorandos)",
-        ],
-        competencias_comportamentales=[
-            "Comunes: Aprendizaje continuo, Orientación a resultados, Orientación al usuario y al ciudadano, Compromiso con la organización",
-            "Por Nivel Jerárquico: Manejo de la Información, Relaciones interpersonales, Colaboración, Trabajo en equipo, Adaptación al cambio",
-        ],
-        requisitos="Diploma de Bachiller y treinta (30) meses de experiencia relacionada (aplican equivalencias Decreto 785 de 2005).",
-    ),
-}
-
-
 def construir_texto_desde_perfil(p: PerfilManual) -> str:
   return (
       f"ENTIDAD: {p.entidad}\nCARGO: {p.cargo} ({p.codigo_grado}) - {p.nivel}\n"
@@ -305,18 +213,15 @@ def construir_texto_desde_perfil(p: PerfilManual) -> str:
   )
 
 
-# Inicialización de Estado
+# Inicialización de Estado Limpia (Cada usuario carga sus propios manuales)
 if "perfiles" not in st.session_state:
-  st.session_state.perfiles = dict(PERFILES_PRECARGADOS)
+  st.session_state.perfiles = {}
 if "manuales_texto" not in st.session_state:
-  st.session_state.manuales_texto = {
-      k: construir_texto_desde_perfil(v) for k, v in PERFILES_PRECARGADOS.items()
-  }
+  st.session_state.manuales_texto = {}
 if "paginas" not in st.session_state:
-  st.session_state.paginas = [
-      Pagina(k, 1, construir_texto_desde_perfil(v))
-      for k, v in PERFILES_PRECARGADOS.items()
-  ]
+  st.session_state.paginas = []
+if "uploader_key" not in st.session_state:
+  st.session_state.uploader_key = 0
 if "puntaje" not in st.session_state:
   st.session_state.puntaje = 0
 if "total" not in st.session_state:
@@ -418,7 +323,7 @@ def extraer_pdf(nombre: str, datos: bytes) -> Tuple[str, List[Pagina]]:
     return "", []
 
 
-def analizar_manual_universal(client, nombre_archivo: str, texto: str) -> Optional[PerfilManual]:
+def analizar_manual_universal(client, nombre_archivo: str, texto: str) -> PerfilManual:
   muestra = texto[:28000]
   prompt = f"""
   Eres un experto en análisis de Manuales Específicos de Funciones y Competencias Laborales de Colombia (CNSC, DIAN, Contraloría, Alcaldías, Gobernaciones, Entidades Nacionales).
@@ -441,30 +346,44 @@ def analizar_manual_universal(client, nombre_archivo: str, texto: str) -> Option
   }}
   """
   raw = llamar_gemini(client, prompt)
-  if not raw:
-    return None
-  try:
-    limpio = re.sub(r"```(?:json)?", "", raw.strip())
-    limpio = re.sub(r"```", "", limpio).strip()
-    m = re.search(r"\{.*\}", limpio, re.DOTALL)
-    if m:
-      limpio = m.group(0)
-    d = json.loads(limpio)
-    return PerfilManual(
-        nombre_archivo=nombre_archivo,
-        entidad=d.get("entidad", "Entidad Pública"),
-        cargo=d.get("cargo", "Cargo Público"),
-        codigo_grado=d.get("codigo_grado", "N/A"),
-        nivel=d.get("nivel", "Carrera Administrativa"),
-        proposito=d.get("proposito", "Cumplir las funciones asignadas al cargo."),
-        funciones_esenciales=d.get("funciones_esenciales", []),
-        conocimientos_ejes=d.get("conocimientos_ejes", []),
-        competencias_funcionales=d.get("competencias_funcionales", []),
-        competencias_comportamentales=d.get("competencias_comportamentales", []),
-        requisitos=d.get("requisitos", "Según manual de funciones."),
-    )
-  except Exception:
-    return None
+  if raw:
+    try:
+      limpio = re.sub(r"```(?:json)?", "", raw.strip())
+      limpio = re.sub(r"```", "", limpio).strip()
+      m = re.search(r"\{.*\}", limpio, re.DOTALL)
+      if m:
+        limpio = m.group(0)
+      d = json.loads(limpio)
+      return PerfilManual(
+          nombre_archivo=nombre_archivo,
+          entidad=d.get("entidad") or "Entidad Pública",
+          cargo=d.get("cargo") or nombre_archivo,
+          codigo_grado=d.get("codigo_grado") or "OPEC / Manual Activo",
+          nivel=d.get("nivel") or "Carrera Administrativa",
+          proposito=d.get("proposito") or "Cumplir las funciones asignadas al cargo según el manual.",
+          funciones_esenciales=d.get("funciones_esenciales") or ["Funciones integrales contenidas en el manual cargado."],
+          conocimientos_ejes=d.get("conocimientos_ejes") or ["Normativa y conocimientos básicos del empleo."],
+          competencias_funcionales=d.get("competencias_funcionales") or ["Aplicación de procedimientos técnicos y misionales del cargo."],
+          competencias_comportamentales=d.get("competencias_comportamentales") or ["Comportamiento ético, compromiso, adaptabilidad y trabajo en equipo."],
+          requisitos=d.get("requisitos") or "Según manual de funciones cargado.",
+      )
+    except Exception:
+      pass
+
+  # Perfil de respaldo automático si el documento tiene un formato libre
+  return PerfilManual(
+      nombre_archivo=nombre_archivo,
+      entidad="Documento Oficial Cargado",
+      cargo=nombre_archivo.replace(".pdf", "").replace(".txt", ""),
+      codigo_grado="Manual Activo",
+      nivel="Concurso de Méritos",
+      proposito=texto[:350].replace("\n", " ") + "...",
+      funciones_esenciales=["Funciones extraídas directamente del documento cargado."],
+      conocimientos_ejes=["Ejes temáticos y normativa del documento cargado."],
+      competencias_funcionales=["Competencias funcionales del cargo."],
+      competencias_comportamentales=["Juicio situacional y competencias comportamentales del nivel."],
+      requisitos="Ver detalle en el documento cargado.",
+  )
 
 
 def generar_pregunta_por_eje(
@@ -479,8 +398,11 @@ def generar_pregunta_por_eje(
         ("COMPETENCIA COMPORTAMENTAL (Juicio Situacional)", perfil.competencias_comportamentales),
     ]
     categorias_validas = [(nombre, lista) for nombre, lista in categorias if lista]
-    cat_nombre, lista_items = random.choice(categorias_validas)
-    foco_evaluacion = f"{cat_nombre}: {random.choice(lista_items)}"
+    if categorias_validas:
+      cat_nombre, lista_items = random.choice(categorias_validas)
+      foco_evaluacion = f"{cat_nombre}: {random.choice(lista_items)}"
+    else:
+      foco_evaluacion = f"PROPÓSITO Y FUNCIONES: {perfil.proposito}"
   elif modalidad_eje.startswith("📋 Solo Funciones"):
     foco_evaluacion = "FUNCIÓN ESENCIAL: " + (
         random.choice(perfil.funciones_esenciales) if perfil.funciones_esenciales else perfil.proposito
@@ -585,6 +507,7 @@ archivos_up = st.sidebar.file_uploader(
     "Carga cualquier Manual OPEC (PDF o TXT)",
     type=["pdf", "txt"],
     accept_multiple_files=True,
+    key=f"uploader_{st.session_state.uploader_key}",
 )
 
 if archivos_up:
@@ -600,35 +523,49 @@ if archivos_up:
       if txt_doc.strip():
         st.session_state.manuales_texto[arc.name] = txt_doc
         st.session_state.paginas.extend(pags)
-        if client:
-          with st.spinner(f"Analizando estructura de {arc.name} con IA..."):
-            nuevo_p = analizar_manual_universal(client, arc.name, txt_doc)
-            if nuevo_p:
-              st.session_state.perfiles[arc.name] = nuevo_p
-              st.sidebar.success(f"✅ Cargo detectado: {nuevo_p.cargo}")
-        else:
-          st.sidebar.info(f"📄 {arc.name} cargado. Ingresa tu API Key y presiona Re-analizar.")
 
-nombres_manuales = list(st.session_state.perfiles.keys())
-manual_activo_key = st.sidebar.selectbox(
-    "Selecciona el Manual / Cargo para Entrenar:",
-    nombres_manuales,
-    index=0,
-)
-perfil_activo = st.session_state.perfiles[manual_activo_key]
-
-# Si subieron un archivo sin API key, permitir analizarlo luego
+# Perfilado automático de cualquier documento subido apenas exista API Key válida
 archivos_sin_perfil = [
     k for k in st.session_state.manuales_texto.keys() if k not in st.session_state.perfiles
 ]
-if archivos_sin_perfil and client:
-  for k_pend in archivos_sin_perfil:
-    if st.sidebar.button(f"🔍 Extraer Funciones de {k_pend}"):
-      with st.spinner("Extrayendo funciones, ejes y competencias..."):
-        p_ext = analizar_manual_universal(client, k_pend, st.session_state.manuales_texto[k_pend])
-        if p_ext:
-          st.session_state.perfiles[k_pend] = p_ext
-          st.rerun()
+if archivos_sin_perfil:
+  if client:
+    for k_pend in archivos_sin_perfil:
+      with st.spinner(f"Analizando estructura de {k_pend} con IA..."):
+        nuevo_p = analizar_manual_universal(client, k_pend, st.session_state.manuales_texto[k_pend])
+        st.session_state.perfiles[k_pend] = nuevo_p
+        st.sidebar.success(f"✅ Cargo detectado: {nuevo_p.cargo}")
+  else:
+    st.sidebar.info("📄 Archivo recibido. Pega arriba tu GEMINI_API_KEY para analizarlo automáticamente.")
+
+nombres_manuales = list(st.session_state.perfiles.keys())
+
+if nombres_manuales:
+  manual_activo_key = st.sidebar.selectbox(
+      "Selecciona el Manual / Cargo para Entrenar:",
+      nombres_manuales,
+      index=0,
+  )
+  perfil_activo = st.session_state.perfiles[manual_activo_key]
+
+  if st.sidebar.button("🗑️ Limpiar / Cambiar Manuales", use_container_width=True):
+    st.session_state.perfiles = {}
+    st.session_state.manuales_texto = {}
+    st.session_state.paginas = []
+    if "q_actual" in st.session_state:
+      del st.session_state.q_actual
+    st.session_state.uploader_key += 1
+    st.rerun()
+else:
+  st.sidebar.warning("⚠️ Sube tu Manual de Funciones (PDF o TXT) para comenzar.")
+  perfil_activo = PerfilManual(
+      nombre_archivo="ninguno",
+      entidad="Esperando Manual de Funciones...",
+      cargo="Sube tu Manual de Funciones en PDF",
+      codigo_grado="Sin archivo cargado",
+      nivel="Cualquier Concurso de Méritos",
+      proposito="Sube el Manual de Funciones o Ficha OPEC de tu cargo en la barra lateral izquierda (Sección 2) para extraer automáticamente tus funciones esenciales, ejes temáticos y competencias.",
+  )
 
 # 3. Selector de Ejes de Entrenamiento
 st.sidebar.markdown("---")
@@ -652,7 +589,10 @@ if modalidad_eje.startswith("🔍"):
       + [f"[Funcional] {x}" for x in perfil_activo.competencias_funcionales]
       + [f"[Comportamental] {x}" for x in perfil_activo.competencias_comportamentales]
   )
-  item_especifico = st.sidebar.selectbox("Selecciona el ítem exacto:", todos_los_items)
+  if todos_los_items:
+    item_especifico = st.sidebar.selectbox("Selecciona el ítem exacto:", todos_los_items)
+  else:
+    st.sidebar.caption("Sube primero un manual para ver la lista de funciones y ejes.")
 
 dificultad = st.sidebar.select_slider(
     "Nivel de Dificultad",
@@ -762,7 +702,7 @@ st.write("")
 tab_sim, tab_ficha, tab_comp, tab_planes = st.tabs([
     "🎯 Simulador Inteligente",
     "📋 Radiografía del Manual Activo",
-    "🔄 Comparador de Manuales (DIAN vs Contraloría / Otros)",
+    "🔄 Comparador de Manuales (OPEC)",
     "💎 Planes de Acceso (Nequi / PSE)",
 ])
 
@@ -863,7 +803,11 @@ def renderizar_planes_de_pago():
 with tab_sim:
   if not client:
     st.info(
-        "👈 **Paso 1 para empezar:** Pega tu clave gratuita **`GEMINI_API_KEY`** en la barra lateral izquierda (tienes una guía desplegable de 30 segundos ahí mismo si aún no tienes una). Mientras tanto, puedes explorar la pestaña **📋 Radiografía del Manual Activo** o **🔄 Comparador de Manuales**."
+        "👈 **Paso 1 para empezar:** Pega tu clave gratuita **`GEMINI_API_KEY`** en la barra lateral izquierda (tienes una guía desplegable de 30 segundos ahí mismo si aún no tienes una)."
+    )
+  elif not nombres_manuales:
+    st.warning(
+        "📂 **Paso 2 para empezar:** Sube el **Manual de Funciones o Ficha OPEC (PDF o TXT)** en la Sección 2 de la barra lateral izquierda. La IA extraerá automáticamente las funciones, ejes temáticos y competencias de tu cargo."
     )
   else:
     bloqueado = (
@@ -1053,88 +997,94 @@ with tab_sim:
 # PESTAÑA 2: RADIOGRAFÍA DEL MANUAL ACTIVO
 # ------------------------------------------
 with tab_ficha:
-  st.markdown(
-      f"""
-      <div class="saas-card">
-          <span class="eje-badge">🏛️ {html.escape(perfil_activo.entidad)}</span>
-          <span class="dif-badge">{html.escape(perfil_activo.codigo_grado)}</span>
-          <h3 style="margin:10px 0 6px 0;">{html.escape(perfil_activo.cargo)} ({html.escape(perfil_activo.nivel)})</h3>
-          <p><b>Propósito Principal:</b> {html.escape(perfil_activo.proposito)}</p>
-          <p style="font-size:13.5px; color:#475569;"><b>🎓 Requisitos de Estudio y Experiencia:</b> {html.escape(perfil_activo.requisitos)}</p>
-      </div>
-      """,
-      unsafe_allow_html=True,
-  )
+  if not nombres_manuales:
+    st.info("📂 Sube un Manual de Funciones en la barra lateral izquierda para visualizar aquí toda la radiografía de funciones, conocimientos básicos y competencias de tu cargo.")
+  else:
+    st.markdown(
+        f"""
+        <div class="saas-card">
+            <span class="eje-badge">🏛️ {html.escape(perfil_activo.entidad)}</span>
+            <span class="dif-badge">{html.escape(perfil_activo.codigo_grado)}</span>
+            <h3 style="margin:10px 0 6px 0;">{html.escape(perfil_activo.cargo)} ({html.escape(perfil_activo.nivel)})</h3>
+            <p><b>Propósito Principal:</b> {html.escape(perfil_activo.proposito)}</p>
+            <p style="font-size:13.5px; color:#475569;"><b>🎓 Requisitos de Estudio y Experiencia:</b> {html.escape(perfil_activo.requisitos)}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-  c_fun, c_eje = st.columns(2)
-  with c_fun:
-    st.markdown("#### 📋 Funciones Esenciales del Empleo")
-    for f_item in perfil_activo.funciones_esenciales:
-      st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">🔹 {html.escape(f_item)}</div>', unsafe_allow_html=True)
+    c_fun, c_eje = st.columns(2)
+    with c_fun:
+      st.markdown("#### 📋 Funciones Esenciales del Empleo")
+      for f_item in perfil_activo.funciones_esenciales:
+        st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">🔹 {html.escape(f_item)}</div>', unsafe_allow_html=True)
 
-    st.markdown("#### 🤝 Competencias Comportamentales")
-    for cc_item in perfil_activo.competencias_comportamentales:
-      st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">🌟 {html.escape(cc_item)}</div>', unsafe_allow_html=True)
+      st.markdown("#### 🤝 Competencias Comportamentales")
+      for cc_item in perfil_activo.competencias_comportamentales:
+        st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">🌟 {html.escape(cc_item)}</div>', unsafe_allow_html=True)
 
-  with c_eje:
-    st.markdown("#### 📘 Conocimientos Básicos / Ejes Temáticos")
-    for ej_item in perfil_activo.conocimientos_ejes:
-      st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">📗 {html.escape(ej_item)}</div>', unsafe_allow_html=True)
+    with c_eje:
+      st.markdown("#### 📘 Conocimientos Básicos / Ejes Temáticos")
+      for ej_item in perfil_activo.conocimientos_ejes:
+        st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">📗 {html.escape(ej_item)}</div>', unsafe_allow_html=True)
 
-    st.markdown("#### ⚙️ Competencias Funcionales Específicas")
-    for cf_item in perfil_activo.competencias_funcionales:
-      st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">⚡ {html.escape(cf_item)}</div>', unsafe_allow_html=True)
+      st.markdown("#### ⚙️ Competencias Funcionales Específicas")
+      for cf_item in perfil_activo.competencias_funcionales:
+        st.markdown(f'<div class="saas-card" style="padding:12px; margin-bottom:8px;">⚡ {html.escape(cf_item)}</div>', unsafe_allow_html=True)
 
 # ------------------------------------------
 # PESTAÑA 3: COMPARADOR DE MANUALES (OPEC)
 # ------------------------------------------
 with tab_comp:
   st.markdown("#### 🔄 Comparador Estratégico de Manuales de Funciones")
-  st.caption("Compara lado a lado dos cargos (por ejemplo, DIAN vs. Contraloría o dos fichas OPEC que hayas subido) para identificar temas comunes de estudio.")
+  st.caption("Sube dos o más fichas OPEC en la barra lateral para compararlas lado a lado e identificar temas comunes de estudio.")
 
-  col_m1, col_m2 = st.columns(2)
-  with col_m1:
-    m1_key = st.selectbox("Manual A:", nombres_manuales, index=0, key="comp_m1")
-    p_m1 = st.session_state.perfiles[m1_key]
-    st.markdown(
-        f"""
-        <div class="saas-card">
-            <span class="eje-badge">{html.escape(p_m1.entidad)}</span>
-            <h4>{html.escape(p_m1.cargo)} ({html.escape(p_m1.codigo_grado)})</h4>
-            <p style="font-size:13.5px;"><b>Nivel:</b> {html.escape(p_m1.nivel)}</p>
-            <p style="font-size:13.5px;"><b>Propósito:</b> {html.escape(p_m1.proposito)}</p>
-            <hr>
-            <b>📋 Funciones ({len(p_m1.funciones_esenciales)}):</b>
-            <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in p_m1.funciones_esenciales)}</ul>
-            <b>📘 Ejes y Competencias Funcionales:</b>
-            <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in (p_m1.conocimientos_ejes + p_m1.competencias_funcionales))}</ul>
-            <b>🎓 Requisitos:</b> <span style="font-size:13px;">{html.escape(p_m1.requisitos)}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+  if not nombres_manuales:
+    st.info("📂 Aún no has subido manuales. Carga tus archivos PDF en la barra lateral izquierda para habilitar el comparador.")
+  else:
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+      m1_key = st.selectbox("Manual A:", nombres_manuales, index=0, key="comp_m1")
+      p_m1 = st.session_state.perfiles[m1_key]
+      st.markdown(
+          f"""
+          <div class="saas-card">
+              <span class="eje-badge">{html.escape(p_m1.entidad)}</span>
+              <h4>{html.escape(p_m1.cargo)} ({html.escape(p_m1.codigo_grado)})</h4>
+              <p style="font-size:13.5px;"><b>Nivel:</b> {html.escape(p_m1.nivel)}</p>
+              <p style="font-size:13.5px;"><b>Propósito:</b> {html.escape(p_m1.proposito)}</p>
+              <hr>
+              <b>📋 Funciones ({len(p_m1.funciones_esenciales)}):</b>
+              <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in p_m1.funciones_esenciales)}</ul>
+              <b>📘 Ejes y Competencias Funcionales:</b>
+              <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in (p_m1.conocimientos_ejes + p_m1.competencias_funcionales))}</ul>
+              <b>🎓 Requisitos:</b> <span style="font-size:13px;">{html.escape(p_m1.requisitos)}</span>
+          </div>
+          """,
+          unsafe_allow_html=True,
+      )
 
-  with col_m2:
-    idx_def = 1 if len(nombres_manuales) > 1 else 0
-    m2_key = st.selectbox("Manual B:", nombres_manuales, index=idx_def, key="comp_m2")
-    p_m2 = st.session_state.perfiles[m2_key]
-    st.markdown(
-        f"""
-        <div class="saas-card">
-            <span class="dif-badge">{html.escape(p_m2.entidad)}</span>
-            <h4>{html.escape(p_m2.cargo)} ({html.escape(p_m2.codigo_grado)})</h4>
-            <p style="font-size:13.5px;"><b>Nivel:</b> {html.escape(p_m2.nivel)}</p>
-            <p style="font-size:13.5px;"><b>Propósito:</b> {html.escape(p_m2.proposito)}</p>
-            <hr>
-            <b>📋 Funciones ({len(p_m2.funciones_esenciales)}):</b>
-            <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in p_m2.funciones_esenciales)}</ul>
-            <b>📘 Ejes y Competencias Funcionales:</b>
-            <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in (p_m2.conocimientos_ejes + p_m2.competencias_funcionales))}</ul>
-            <b>🎓 Requisitos:</b> <span style="font-size:13px;">{html.escape(p_m2.requisitos)}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with col_m2:
+      idx_def = 1 if len(nombres_manuales) > 1 else 0
+      m2_key = st.selectbox("Manual B:", nombres_manuales, index=idx_def, key="comp_m2")
+      p_m2 = st.session_state.perfiles[m2_key]
+      st.markdown(
+          f"""
+          <div class="saas-card">
+              <span class="dif-badge">{html.escape(p_m2.entidad)}</span>
+              <h4>{html.escape(p_m2.cargo)} ({html.escape(p_m2.codigo_grado)})</h4>
+              <p style="font-size:13.5px;"><b>Nivel:</b> {html.escape(p_m2.nivel)}</p>
+              <p style="font-size:13.5px;"><b>Propósito:</b> {html.escape(p_m2.proposito)}</p>
+              <hr>
+              <b>📋 Funciones ({len(p_m2.funciones_esenciales)}):</b>
+              <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in p_m2.funciones_esenciales)}</ul>
+              <b>📘 Ejes y Competencias Funcionales:</b>
+              <ul style="font-size:13px;">{''.join(f'<li>{html.escape(x)}</li>' for x in (p_m2.conocimientos_ejes + p_m2.competencias_funcionales))}</ul>
+              <b>🎓 Requisitos:</b> <span style="font-size:13px;">{html.escape(p_m2.requisitos)}</span>
+          </div>
+          """,
+          unsafe_allow_html=True,
+      )
 
 # ------------------------------------------
 # PESTAÑA 4: PLANES Y PAGOS NEQUI / PSE
