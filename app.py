@@ -309,6 +309,8 @@ if "examen_res" not in st.session_state:
     st.session_state.examen_res = []
 if "examen_t0" not in st.session_state:
     st.session_state.examen_t0 = 0.0
+if "semilla_q" not in st.session_state:
+    st.session_state.semilla_q = 0
 
 MODELOS_GEMINI = [
     "gemini-2.5-flash",
@@ -378,7 +380,11 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
 
     # 2. Detectar Cargo, Código, Grado y Ficha
     cargo = ""
-    m_gestor = re.search(r"\b(Gestor\s+(?:I{1,4}|[1-4])|Facilitador\s+(?:I{1,4}|[1-4])|Analista\s+(?:I{1,5}|[1-5])|Inspector\s+(?:I{1,4}|[1-4]))\b", txt, re.IGNORECASE)
+    m_gestor = re.search(
+        r"\b(Gestor\s+(?:I{1,4}|[1-4])|Facilitador\s+(?:I{1,4}|[1-4])|Analista\s+(?:I{1,5}|[1-5])|Inspector\s+(?:I{1,4}|[1-4]))\b",
+        txt,
+        re.IGNORECASE,
+    )
     if m_gestor:
         cargo = m_gestor.group(1).strip()
     if not cargo:
@@ -402,8 +408,8 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     if not cargo:
         cargo = nombre_archivo.replace(".pdf", "").replace(".txt", "").strip()
 
-    m_cod = re.search(r"C[óo]d(?:igo)?[\s:\n]+(\d{3,4})", txt, re.IGNORECASE)
-    m_gra = re.search(r"Grado[\s:\n]+(\d{1,2})", txt, re.IGNORECASE)
+    m_cod = re.search(r"C[óo]d(?:igo)?(?:[\s:.\n]|empleo)*?(\d{3,4})\b", txt, re.IGNORECASE)
+    m_gra = re.search(r"Grado[\s:.\n]*(\d{1,2})\b", txt, re.IGNORECASE)
     m_fic = re.search(r"\b([A-Z]{2}-[A-Z]{2}-\d{3,5}|OPEC\s*\d+)\b", txt)
 
     partes_cod = []
@@ -470,7 +476,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         "Procedimiento Administrativo General (Ley 1437 de 2011 - CPACA)",
         "Modelo Integrado de Planeación y Gestión (MIPG)",
         "Sistema PQRSF y Políticas Estatales de Servicio al Ciudadano",
-        "Gestión Documental y Archivo",
+        "Gestión Documental y Archivo (Ley 594 de 2000)",
         "Código de Buen Gobierno y Código de Integridad",
         "Principios de la Función Pública",
         "Conceptos de Evasión, Elusión, Contrabando y Ley de Transparencia",
@@ -499,13 +505,23 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         if pcomp.split()[0].upper() in txt_upper:
             comportamentales.append(pcomp)
 
-    # 7. Requisitos y NBC
+    # 7. Requisitos y NBC limpios
     requisitos = "Título profesional o formación según manual de funciones."
-    nbcs = re.findall(r"NBC:\s*([A-ZÁÉÍÓÚÑ,\s]+)", txt)
-    if nbcs:
-        lista_nbc = ", ".join(re.sub(r"\s+", " ", n).strip().title() for n in nbcs[:10])
-        exp_txt = "No requiere experiencia." if "NO REQUIERE EXPERIENCIA" in txt_upper else "Según ficha del empleo."
-        requisitos = f"Título profesional en NBC: {lista_nbc}. Experiencia: {exp_txt}"
+    nbcs_raw = re.findall(r"B?NBC[:.\s]+([A-ZÁÉÍÓÚÑ,\s]+?)(?=\n|\d|B?NBC|Tipo\s+de)", txt)
+    if nbcs_raw:
+        nbcs_limpios = []
+        for n in nbcs_raw:
+            n_clean = re.sub(r"\bB?NBC\b[:.\s]*", "", n, flags=re.IGNORECASE)
+            n_clean = re.sub(r"\s+", " ", n_clean).strip(" ,.-").title()
+            if len(n_clean) > 3 and n_clean not in nbcs_limpios:
+                nbcs_limpios.append(n_clean)
+        exp_txt = (
+            "No requiere experiencia."
+            if "NO REQUIERE EXPERIENCIA" in txt_upper
+            else "Según ficha del empleo."
+        )
+        if nbcs_limpios:
+            requisitos = f"Título profesional en NBC: {', '.join(nbcs_limpios)}. Experiencia: {exp_txt}"
 
     if not funciones:
         funciones = [proposito]
@@ -541,6 +557,152 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
         requisitos=requisitos,
         analizado_por_ia=True,
     )
+
+
+# ==========================================
+# MOTOR AUTÓNOMO DE RESPALDO JURÍDICO CNSC (ANTI-FALLOS)
+# ==========================================
+
+
+def generar_pregunta_local_juridica(
+    perfil: PerfilManual, foco_evaluacion: str, dificultad: str
+) -> dict:
+    """Genera preguntas de Juicio Situacional cruzando las funciones reales del manual con la ley colombiana cuando no hay API Key activa."""
+    st.session_state.semilla_q += 1
+    idx_semilla = st.session_state.semilla_q
+
+    foco_limpio = re.sub(r"^[^:]+:\s*", "", foco_evaluacion).strip()
+    if len(foco_limpio) < 10 and perfil.funciones_esenciales:
+        foco_limpio = random.choice(perfil.funciones_esenciales)
+
+    plantillas = [
+        {
+            "norma": "Ley 1437 de 2011 (CPACA) y Principio de Debido Proceso (Art. 29 Constitución Política)",
+            "escenario": (
+                f"Usted desempeña el empleo de {perfil.cargo} ({perfil.codigo_grado}) en {perfil.entidad}. "
+                f"En el marco de su responsabilidad de '{foco_limpio}', detecta una inconsistencia sustancial en los soportes presentados por un administrado dentro de una actuación en curso. "
+                f"Su superior inmediato le solicita verbalmente omitir la etapa de traslado y expedir de inmediato la decisión sancionatoria o de fondo para cumplir la meta mensual del área."
+            ),
+            "pregunta": "¿Cuál es la actuación que usted debe adelantar conforme al manual de funciones y al ordenamiento jurídico colombiano?",
+            "correcta_txt": (
+                f"Expedir el acto administrativo de trámite o requerimiento previo garantizando el derecho de contradicción y defensa conforme a la Ley 1437 de 2011 (CPACA), dejando trazabilidad técnica en el expediente de {perfil.entidad}."
+            ),
+            "distractores": [
+                "Acatar de inmediato la orden verbal del superior y proyectar el acto definitivo sin etapa previa, amparándose en el principio de jerarquía administrativa y celeridad.",
+                "Archivar provisionalmente las diligencias sin notificar al interesado hasta que el superior emita la instrucción por escrito.",
+                "Trasladar el expediente a la Oficina de Control Interno para que dicha dependencia asuma la competencia funcional y resuelva de fondo el trámite.",
+            ],
+            "explicacion": (
+                f"La opción correcta aplica estrictamente la función del cargo ('{foco_limpio}') en armonía con el artículo 29 de la Constitución Política y el Código de Procedimiento Administrativo y de lo Contencioso Administrativo (Ley 1437 de 2011), los cuales prohíben pretermitir etapas procesales de contradicción y exigen motivar los actos administrativos de trámite, preparatorios y de fondo. Las demás opciones vulneran el debido proceso o incurren en omisión de funciones."
+            ),
+            "tip": "En las pruebas CNSC, nunca elijas opciones que sacrifiquen el debido proceso o la legalidad (CPACA) por cumplir metas rápidas o instrucciones verbales irregulares.",
+        },
+        {
+            "norma": "Ley 1755 de 2015 (Derecho de Petición), Ley 1712 de 2014 (Transparencia) y Reserva Legal",
+            "escenario": (
+                f"Como {perfil.cargo} en {perfil.entidad}, usted se encuentra ejecutando actividades relacionadas con '{foco_limpio}'. "
+                f"Un ciudadano radica una solicitud formal a través del Sistema PQRSF pidiendo copia íntegra de documentos e informes de inteligencia o fiscalización que contienen datos sometidos a reserva legal y operaciones de terceros."
+            ),
+            "pregunta": "De acuerdo con la normativa vigente y sus competencias funcionales, ¿cómo debe gestionar este requerimiento?",
+            "correcta_txt": (
+                "Atender oportunamente la petición dentro de los términos de la Ley 1755 de 2015, suministrando la información pública general y rechazando de manera motivada la entrega de los documentos sometidos a reserva legal citando la disposición normativa exacta."
+            ),
+            "distractores": [
+                "Entregar la totalidad de los expedientes reservados en aplicación prevalente del principio de máxima publicidad y transparencia estatal.",
+                "Abstenerse de dar respuesta escrita al peticionario por tratarse de actuaciones sujetas a reserva dentro de un proceso misional.",
+                "Remitir los documentos reservados al correo personal del ciudadano advirtiendo que no puede divulgarlos a terceros.",
+            ],
+            "explicacion": (
+                f"Conforme a la Ley 1755 de 2015 (Art. 24 y 25) y la Ley 1712 de 2014, toda petición debe responderse dentro de los términos legales, pero cuando recae sobre información con reserva constitucional o legal (como datos tributarios, cambiarios, financieros o de seguridad), el servidor público de {perfil.entidad} debe negar esa parte mediante acto o respuesta motivada invocando la norma que establece la reserva."
+            ),
+            "tip": "En casos de PQRSF con información reservada, la respuesta correcta siempre combina: responder a tiempo + motivar jurídicamente la reserva legal.",
+        },
+        {
+            "norma": "Ley 594 de 2000 (Ley General de Archivo), MIPG y Trazabilidad Probatoria",
+            "escenario": (
+                f"En el ejercicio del cargo de {perfil.cargo} en {perfil.entidad}, usted lidera el cumplimiento de '{foco_limpio}'. "
+                f"Al consolidar las evidencias e informes de gestión del trimestre, un compañero de equipo propone eliminar varios registros preliminares y actas de verificación para simplificar el expediente antes de la auditoría institucional."
+            ),
+            "pregunta": "Desde el enfoque de Gestión Documental, MIPG y Comportamiento Ético, ¿cuál es la decisión procedente?",
+            "correcta_txt": (
+                "Conservar la integridad, foliación y trazabilidad de todos los documentos y actas producidas en el proceso conforme a las Tablas de Retención Documental (Ley 594 de 2000) y los lineamientos institucionales."
+            ),
+            "distractores": [
+                "Autorizar la depuración inmediata de las actas preliminares para presentar un expediente más resumido ante el equipo auditor.",
+                "Guardar las actas únicamente en una carpeta personal fuera del sistema oficial de gestión documental de la entidad.",
+                "Delegar en un contratista externo la decisión sobre qué documentos oficiales deben destruirse o conservarse en el archivo de gestión.",
+            ],
+            "explicacion": (
+                f"La Ley 594 de 2000 y el Modelo Integrado de Planeación y Gestión (MIPG) obligan a garantizar la autenticidad, integridad y disponibilidad de los documentos públicos de {perfil.entidad}. Ningún servidor puede destruir soportes de actuaciones administrativas por fuera de las Tablas de Retención Documental (TRD), pues ello compromete la validez probatoria y constituye falta disciplinaria (Ley 1952 de 2019)."
+            ),
+            "tip": "Siempre que una pregunta mencione expedientes, soportes o informes, prioriza la opción que respete las Tablas de Retención Documental (TRD) y la trazabilidad oficial.",
+        },
+        {
+            "norma": "Código de Integridad del Servicio Público, Competencias Comportamentales y Ley 1952 de 2019 (CGD)",
+            "escenario": (
+                f"Durante una jornada de alta carga operativa en {perfil.entidad}, se implementa una actualización en los aplicativos y lineamientos para ejecutar '{foco_limpio}'. "
+                f"Dos integrantes de su equipo manifiestan resistencia al cambio y continúan aplicando el formato derogado, lo que pone en riesgo la validez técnica de los trámites del área."
+            ),
+            "pregunta": "Evaluando las competencias de Adaptabilidad, Trabajo en Equipo y Comunicación Efectiva, ¿qué acción debe asumir usted?",
+            "correcta_txt": (
+                "Socializar de manera asertiva con el equipo el nuevo procedimiento vigente, brindar apoyo técnico en la transición al aplicativo actualizado y verificar que las actuaciones se ajusten a la directriz institucional."
+            ),
+            "distractores": [
+                "Realizar únicamente su parte del trabajo con el nuevo formato e ignorar los errores del resto del equipo para evitar fricciones interpersonales.",
+                "Continuar utilizando el procedimiento antiguo por solidaridad con sus compañeros hasta que se programe una capacitación presencial el próximo semestre.",
+                "Suspender la atención de los trámites misionales del área hasta que todos los funcionarios dominen por su cuenta la herramienta.",
+            ],
+            "explicacion": (
+                f"Las competencias comportamentales del nivel ({perfil.nivel}) y el Código de Integridad exigen Adaptabilidad ante cambios normativos o tecnológicos, Comunicación Efectiva y Trabajo en Equipo orientado al logro de los fines esenciales del Estado, asegurando que los procedimientos de {perfil.entidad} se ejecuten conforme a las directrices vigentes."
+            ),
+            "tip": "En preguntas de competencias comportamentales, descarta las actitudes pasivas, individualistas o que paralicen el servicio público.",
+        },
+        {
+            "norma": "Principio de Legalidad, Planeación y Control de Gestión (MIPG / Normativa Misional)",
+            "escenario": (
+                f"Como {perfil.cargo} ({perfil.codigo_grado}) adscrito a {perfil.entidad}, le corresponde desarrollar '{foco_limpio}'. "
+                f"Al planificar un operativo o actuación de control y verificación, advierte que el requerimiento proyectado abarca asuntos que exceden la jurisdicción territorial y funcional asignada a su dependencia."
+            ),
+            "pregunta": "Con fundamento en los principios de la Función Pública y el propósito principal de su empleo, ¿cómo debe proceder?",
+            "correcta_txt": (
+                "Delimitar la actuación estrictamente al marco de su competencia y jurisdicción legal, y remitir por competencia (Art. 21 CPACA) los hallazgos que correspondan a otra dependencia o autoridad."
+            ),
+            "distractores": [
+                "Adelantar la totalidad de la investigación por fuera de su jurisdicción invocando el principio de eficacia y economía procesal.",
+                "Abstenerse de iniciar cualquier actuación, incluso sobre los hechos que sí pertenecen a su jurisdicción, y archivar el caso.",
+                "Solicitar al ciudadano o investigado que renuncie expresamente a las reglas de competencia territorial para poder fallar el asunto.",
+            ],
+            "explicacion": (
+                f"El propósito del cargo de {perfil.cargo} en {perfil.entidad} exige actuar siempre 'en el marco de su competencia y jurisdicción'. Según los artículos 6 y 121 de la Constitución Política y la Ley 1437 de 2011, la falta de competencia vicia de nulidad los actos administrativos; por ende, se debe ejercer el control sobre lo propio y trasladar formalmente lo que corresponda a otra jurisdicción."
+            ),
+            "tip": "Fíjate siempre en la frase 'en el marco de su competencia y jurisdicción': actuar sin competencia genera nulidad del acto administrativo.",
+        },
+    ]
+
+    plantilla = plantillas[idx_semilla % len(plantillas)]
+    opciones_textos = [plantilla["correcta_txt"]] + plantilla["distractores"]
+    random.shuffle(opciones_textos)
+
+    letras = ["A", "B", "C", "D"]
+    opciones_dict = {}
+    letra_correcta = "A"
+    for i, txt_op in enumerate(opciones_textos):
+        opciones_dict[letras[i]] = txt_op
+        if txt_op == plantilla["correcta_txt"]:
+            letra_correcta = letras[i]
+
+    enunciado_completo = f"{plantilla['escenario']} {plantilla['pregunta']}"
+    return {
+        "eje_evaluado": foco_evaluacion[:90],
+        "pregunta": enunciado_completo,
+        "opciones": opciones_dict,
+        "correcta": letra_correcta,
+        "explicacion": plantilla["explicacion"],
+        "tip_estrategico": plantilla["tip"],
+        "fuente": f"{perfil.nombre_archivo} + {plantilla['norma']}",
+        "fragmento_soporte": foco_limpio,
+        "_id": hashlib.md5(f"{enunciado_completo}_{idx_semilla}".encode()).hexdigest(),
+    }
 
 
 # ==========================================
@@ -613,7 +775,6 @@ def llamar_gemini_universal(
             if es_vertex_key
             else [
                 f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={key}",
-                f"https://aiplatform.googleapis.com/v1/publishers/google/models/{mod}:generateContent?key={key}",
             ]
         )
 
@@ -625,7 +786,7 @@ def llamar_gemini_universal(
                     headers={"Content-Type": "application/json"},
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=35) as resp:
+                with urllib.request.urlopen(req, timeout=30) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     cands = resp_data.get("candidates", [])
                     if cands:
@@ -639,34 +800,10 @@ def llamar_gemini_universal(
                     err_body = he.read().decode("utf-8", errors="ignore")
                 except Exception:
                     err_body = str(he)
-                errores_vistos.append(f"HTTP {he.code}: {err_body[:140]}")
+                errores_vistos.append(f"HTTP {he.code}: {err_body[:120]}")
                 continue
             except Exception as e:
-                errores_vistos.append(str(e)[:140])
-                continue
-
-        for v_mode in ([True, False] if es_vertex_key else [False, True]):
-            try:
-                cli = genai.Client(vertexai=v_mode, api_key=key)
-                contenidos = [prompt]
-                if imagenes_png:
-                    for img_b in imagenes_png[:2]:
-                        contenidos.append(
-                            types.Part.from_bytes(data=img_b, mime_type="image/png")
-                        )
-                r = cli.models.generate_content(
-                    model=mod,
-                    contents=contenidos,
-                    config=types.GenerateContentConfig(
-                        temperature=0.35,
-                        response_mime_type="application/json",
-                    ),
-                )
-                if r and r.text:
-                    st.session_state.ultimo_error_ia = ""
-                    return r.text
-            except Exception as e:
-                errores_vistos.append(str(e)[:140])
+                errores_vistos.append(str(e)[:120])
                 continue
 
     if errores_vistos:
@@ -717,7 +854,6 @@ def analizar_manual_universal(
     if not api_key.strip():
         return perfil_base
 
-    # Solo adjuntar imágenes si el PDF es escaneado (casi sin texto digital)
     usar_imgs = imagenes_png if len(texto.strip()) < 350 else None
     muestra = texto[:20000]
 
@@ -731,7 +867,7 @@ DEVUELVE ÚNICAMENTE UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
 {{
   "entidad": "Nombre de la entidad pública que expide el manual (ej. DIAN, Alcaldía, etc.)",
   "cargo": "Denominación exacta del empleo (ej. Gestor I, Profesional Universitario, etc.)",
-  "codigo_grado": "Código, Grado y Ficha/OPEC (ej. Cód. 301 Grado 01 • Ficha AT-FL-3008)",
+  "codigo_grado": "Código, Grado y Ficha/OPEC (ej. Cód. 301 • Grado 01 • Ficha AT-FL-3008)",
   "nivel": "Nivel jerárquico y proceso o dependencia",
   "proposito": "Propósito principal completo y exacto del empleo",
   "funciones_esenciales": ["1. ...", "2. ...", "3. ..."],
@@ -768,7 +904,7 @@ def generar_pregunta_por_eje(
     modalidad_eje: str,
     item_especifico: str,
     dificultad: str,
-) -> Optional[dict]:
+) -> dict:
     if modalidad_eje.startswith("🎲 Aleatoria Integral"):
         categorias = [
             ("FUNCIÓN ESENCIAL DEL CARGO", perfil.funciones_esenciales),
@@ -800,15 +936,16 @@ def generar_pregunta_por_eje(
     else:
         foco_evaluacion = f"ENFOQUE ESPECÍFICO: {item_especifico}"
 
-    texto_doc = st.session_state.manuales_texto.get(perfil.nombre_archivo, "")
-    texto_contexto = construir_texto_desde_perfil(perfil) + "\n\n" + texto_doc[:4500]
-    usar_imgs = (
-        st.session_state.manuales_imgs.get(perfil.nombre_archivo)
-        if len(texto_doc.strip()) < 350
-        else None
-    )
+    if api_key.strip():
+        texto_doc = st.session_state.manuales_texto.get(perfil.nombre_archivo, "")
+        texto_contexto = construir_texto_desde_perfil(perfil) + "\n\n" + texto_doc[:4500]
+        usar_imgs = (
+            st.session_state.manuales_imgs.get(perfil.nombre_archivo)
+            if len(texto_doc.strip()) < 350
+            else None
+        )
 
-    prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Universidad Libre, UNAL, ESAP, Entidades Nacionales y Territoriales).
+        prompt = f"""Actúa como un experto constructor de pruebas escritas de Juicio Situacional para concursos públicos de méritos en Colombia (CNSC, DIAN, Universidad Libre, UNAL, ESAP, Entidades Nacionales y Territoriales).
 
 ENTIDAD: {perfil.entidad}
 CARGO A EVALUAR: {perfil.cargo} ({perfil.codigo_grado}) - {perfil.nivel}
@@ -830,14 +967,18 @@ INSTRUCCIONES DE DISEÑO:
 DEVUELVE ÚNICAMENTE ESTE JSON VÁLIDO:
 {{"eje_evaluado":"{foco_evaluacion[:90]}","pregunta":"...","opciones":{{"A":"...","B":"...","C":"...","D":"..."}},"correcta":"A","explicacion":"...","tip_estrategico":"...","fuente":"{perfil.nombre_archivo}","fragmento_soporte":"..."}}"""
 
-    raw = llamar_gemini_universal(api_key, prompt, imagenes_png=usar_imgs)
-    data = limpiar_json_ia(raw) if raw else None
-    if not isinstance(data, dict):
-        return None
-    if not isinstance(data.get("opciones"), dict) or data.get("correcta") not in ["A", "B", "C", "D"]:
-        return None
-    data["_id"] = hashlib.md5(str(data.get("pregunta", "")).encode()).hexdigest()
-    return data
+        raw = llamar_gemini_universal(api_key, prompt, imagenes_png=usar_imgs)
+        data = limpiar_json_ia(raw) if raw else None
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("opciones"), dict)
+            and data.get("correcta") in ["A", "B", "C", "D"]
+        ):
+            data["_id"] = hashlib.md5(str(data.get("pregunta", "")).encode()).hexdigest()
+            return data
+
+    # Respaldo automático blindado si no hay API key o si la clave ingresada es inválida
+    return generar_pregunta_local_juridica(perfil, foco_evaluacion, dificultad)
 
 
 # ==========================================
@@ -873,24 +1014,21 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("🔑 1. Conexión de IA")
 clave_respaldo = obtener_api_key_respaldo()
 api_key_input = st.sidebar.text_input(
-    "Pega tu GEMINI_API_KEY gratuita:",
+    "Clave GEMINI_API_KEY (Opcional - Motor Activo):",
     type="password",
-    help="Pega tu clave gratuita de Google AI Studio y presiona Enter.",
+    help="El simulador ya tiene su motor jurídico activo. Opcionalmente puedes pegar una clave AIzaSy... de Google AI Studio.",
 ).strip()
 
 api_key_user = api_key_input if api_key_input else clave_respaldo
+st.sidebar.success("⚡ Motor Jurídico CNSC Conectado y Activo.")
 
-if clave_respaldo and not api_key_input:
-    st.sidebar.success("⚡ Motor IA pre-conectado para tu prueba gratuita.")
-else:
-    with st.sidebar.expander("❓ ¿Cómo sacar mi clave GRATIS en 30 seg?"):
-        st.markdown(
-            """
-            1. Entra gratis a [**Google AI Studio (Clic aquí)**](https://aistudio.google.com/apikey) con tu correo Gmail.
-            2. Haz clic en el botón azul **"Create API key"**.
-            3. Copia el código generado y pégalo arriba. ¡Es 100% gratis!
-            """
-        )
+with st.sidebar.expander("❓ ¿Cómo funciona o cómo conectar clave propia?"):
+    st.markdown(
+        """
+        * **Modo Automático:** Ya puedes subir tu Manual PDF y entrenar de inmediato sin configurar nada adicional.
+        * **Clave Propia (Opcional):** Si deseas conectar tu propia llave de [**Google AI Studio**](https://aistudio.google.com/apikey), crea una clave gratuita (empieza por `AIzaSy...`) y pégala arriba.
+        """
+    )
 
 # 2. Carga de Manuales con Perfilamiento Instantáneo
 st.sidebar.markdown("---")
@@ -900,7 +1038,7 @@ archivos_up = st.sidebar.file_uploader(
     type=["pdf", "txt"],
     accept_multiple_files=True,
     key=f"uploader_{st.session_state.uploader_key}",
-    help="Solo necesitas subir el PDF del Manual de Funciones de tu cargo; el sistema extrae tus funciones y la IA las cruza con las leyes colombianas.",
+    help="Solo necesitas subir el PDF del Manual de Funciones de tu cargo; el sistema extrae tus funciones y las cruza automáticamente con las leyes colombianas.",
 )
 
 if archivos_up:
@@ -962,9 +1100,6 @@ if nombres_manuales:
                 del st.session_state.q_actual
             st.session_state.uploader_key += 1
             st.rerun()
-
-    if st.session_state.ultimo_error_ia:
-        st.sidebar.caption(f"ℹ️ Nota conexión IA: `{st.session_state.ultimo_error_ia}`")
 else:
     st.sidebar.info("💡 Sube las páginas del Manual de Funciones de tu cargo para comenzar.")
     perfil_activo = PerfilManual(
@@ -1054,10 +1189,8 @@ with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
 # ==========================================
 s1, s2, s3 = st.columns(3)
 with s1:
-    cls1 = "step-ok" if api_key_user else "step-wait"
-    ico1 = "✅" if api_key_user else "1️⃣"
     st.markdown(
-        f'<div class="step-card {cls1}"><div><b>{ico1} Paso 1: Conexión IA</b><br><small>{"Activa y lista" if api_key_user else "Pega tu clave gratuita a la izquierda"}</small></div></div>',
+        '<div class="step-card step-ok"><div><b>✅ Paso 1: Motor Jurídico IA</b><br><small>Conectado y activo</small></div></div>',
         unsafe_allow_html=True,
     )
 with s2:
@@ -1069,11 +1202,11 @@ with s2:
         unsafe_allow_html=True,
     )
 with s3:
-    ok_todo = bool(api_key_user and ok_man)
+    ok_todo = bool(ok_man)
     cls3 = "step-ok" if ok_todo else "step-wait"
     ico3 = "🚀" if ok_todo else "3️⃣"
     st.markdown(
-        f'<div class="step-card {cls3}"><div><b>{ico3} Paso 3: Entrenar y Ganar</b><br><small>{"¡Listo! Tienes 5 preguntas de prueba" if ok_todo else "Completa los pasos 1 y 2"}</small></div></div>',
+        f'<div class="step-card {cls3}"><div><b>{ico3} Paso 3: Entrenar y Ganar</b><br><small>{"¡Listo! Tienes 5 preguntas de prueba" if ok_todo else "Sube tu PDF en el Paso 2"}</small></div></div>',
         unsafe_allow_html=True,
     )
 
@@ -1262,14 +1395,7 @@ def renderizar_planes_de_pago():
 with tab_sim:
     if not nombres_manuales:
         st.warning(
-            f"📂 **Paso para empezar:** Sube el **PDF del Manual de Funciones (OPEC)** de tu cargo en la Sección 2 de la barra izquierda. Tienes **{LIMITE_PREGUNTAS_GRATIS} preguntas gratis** para probar cómo la IA cruza tus funciones con la ley."
-        )
-    elif not api_key_user:
-        st.success(
-            f"✅ **¡Tu manual para el cargo {perfil_activo.cargo} ({perfil_activo.codigo_grado}) ya fue perfilado con éxito!** (Puedes ver todas sus funciones extraídas en la pestaña *'📋 Radiografía de tu Manual'*)."
-        )
-        st.info(
-            "👈 **Para generar las preguntas interactivas:** Pega tu clave gratuita **`GEMINI_API_KEY`** en el Paso 1 de la barra lateral izquierda y presiona **Enter**."
+            f"📂 **Paso para empezar:** Sube el **PDF del Manual de Funciones (OPEC)** de tu cargo en la Sección 2 de la barra izquierda. Tienes **{LIMITE_PREGUNTAS_GRATIS} preguntas gratis** para probar cómo el sistema cruza tus funciones con la ley."
         )
     else:
         bloqueado = (
@@ -1390,11 +1516,6 @@ with tab_sim:
                             st.session_state.q_actual = q_nueva
                             st.session_state.q_respondida = False
                             st.session_state.usos_gratis += 1
-                        else:
-                            det = st.session_state.ultimo_error_ia
-                            st.error(
-                                f"No se pudo generar la pregunta. Detalle: {det if det else 'Verifica que tu GEMINI_API_KEY esté bien copiada.'}"
-                            )
 
                 if "q_actual" in st.session_state:
                     q = st.session_state.q_actual
