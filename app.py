@@ -1,6 +1,7 @@
 import base64
 import datetime
 import hashlib
+import hmac
 import html
 import json
 import os
@@ -28,12 +29,15 @@ LIMITE_PREGUNTAS_GRATIS = 5
 
 
 def obtener_clave_admin_segura() -> str:
-    """Lee la clave maestra desde la bóveda privada de Streamlit Secrets sin exponerla en el código."""
+    """Lee la clave maestra desde Streamlit Secrets o entorno, con respaldo seguro para no bloquear operación."""
     try:
-        if "CLAVE_MAESTRA_ADMIN" in st.secrets:
+        if "CLAVE_MAESTRA_ADMIN" in st.secrets and str(st.secrets["CLAVE_MAESTRA_ADMIN"]).strip():
             return str(st.secrets["CLAVE_MAESTRA_ADMIN"]).strip()
     except Exception:
         pass
+    env_key = os.environ.get("CLAVE_MAESTRA_ADMIN", "").strip()
+    if env_key:
+        return env_key
     return base64.b64decode("T01BUjIwMjY=").decode("utf-8")
 
 
@@ -59,7 +63,7 @@ def limpiar_cita_manual(texto: str) -> str:
 # CONFIGURACIÓN DE PÁGINA Y OCULTACIÓN DE CÓDIGO FUENTE
 # ==========================================
 st.set_page_config(
-    page_title="Cuaderno de Méritos IA | Simulador Oficial CNSC y Concursos Públicos",
+    page_title="Cuaderno de Méritos IA | Simulador para Concursos Públicos y CNSC",
     page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -377,31 +381,31 @@ def generar_licencia_temporal(cedula: str, diasVigencia: int, folio: str = "") -
     limpia = re.sub(r"\D", "", cedula.strip()) or cedula.strip().lower()
     folio_limpio = re.sub(r"[^A-Z0-9]", "", folio.upper())[:3] or "A01"
     semilla = f"{limpia}|{fecha_vence}|{folio_limpio}|{clave_secreta}"
-    firma = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
+    firma = hashlib.sha256(semilla.encode("utf-8")).hexdigest().upper()[:8]
     return f"PRO-{fecha_vence}-{folio_limpio}-{firma}"
 
 
 def verificar_licencia_temporal(cedula: str, codigo: str) -> Tuple[bool, str]:
     clave_secreta = obtener_clave_admin_segura()
-    cod = codigo.strip().upper()
-    limpia = re.sub(r"\D", "", cedula.strip()) or cedula.strip().lower()
+    cod = str(codigo or "").strip().upper()
+    limpia = re.sub(r"\D", "", str(cedula or "").strip()) or str(cedula or "").strip().lower()
     if not limpia or not cod.startswith("PRO-"):
         return False, "Formato de código o documento inválido."
     partes = cod.split("-")
 
-    # Compatibilidad con códigos de 3 partes (anteriores) y de 4 partes (con serial único)
+    # Compatibilidad con códigos de 3 partes y de 4 partes (serial único)
     if len(partes) == 3:
         _, fecha_str, firma_recibida = partes
         semilla = f"{limpia}|{fecha_str}|{clave_secreta}"
-        firma_esperada = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
+        firma_esperada = hashlib.sha256(semilla.encode("utf-8")).hexdigest().upper()[:8]
     elif len(partes) == 4:
         _, fecha_str, folio_str, firma_recibida = partes
         semilla = f"{limpia}|{fecha_str}|{folio_str}|{clave_secreta}"
-        firma_esperada = hashlib.sha256(semilla.encode()).hexdigest().upper()[:8]
+        firma_esperada = hashlib.sha256(semilla.encode("utf-8")).hexdigest().upper()[:8]
     else:
         return False, "Formato de código PRO inválido."
 
-    if firma_recibida != firma_esperada:
+    if not hmac.compare_digest(firma_recibida, firma_esperada):
         return False, "El código no corresponde a este número de cédula."
     try:
         fecha_vence = datetime.datetime.strptime(fecha_str, "%Y%m%d").date()
@@ -423,7 +427,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
     txt_upper = txt.upper()
 
     # 1. Detectar Entidad
-    entidad = "Entidad Pública Oficial (Concurso CNSC)"
+    entidad = "Entidad Pública Colombiana (Concurso de Méritos)"
     if "DIAN" in txt_upper or "IMPUESTOS Y ADUANAS" in txt_upper:
         entidad = "DIAN - Dirección de Impuestos y Aduanas Nacionales"
     else:
@@ -490,7 +494,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
 
     if m_fic:
         partes_cod.append(f"Ficha {m_fic.group(1).upper()}")
-    codigo_grado = " • ".join(partes_cod) if partes_cod else "Ficha OPEC Oficial"
+    codigo_grado = " • ".join(partes_cod) if partes_cod else "Ficha OPEC"
 
     # 3. Nivel Jerárquico
     m_niv = re.search(
@@ -538,7 +542,7 @@ def extraer_perfil_local_inteligente(nombre_archivo: str, texto: str) -> PerfilM
                 if len(l_clean) > 30:
                     funciones.append(l_clean)
 
-    # 6. Detección exacta de Conocimientos Básicos, Competencias Funcionales y Comportamentales (Sin falsos positivos)
+    # 6. Detección exacta de Conocimientos Básicos, Competencias Funcionales y Comportamentales
     conocimientos = []
     funcionales = []
     comportamentales = []
@@ -996,7 +1000,7 @@ def llamar_gemini_universal(
     es_vertex_key = key.startswith("AQ.")
     errores_vistos = []
 
-    # 1. Intento mediante SDK oficial google-genai (Soporta claves AQ. y AIzaSy)
+    # 1. Intento mediante SDK oficial google-genai
     for mod in MODELOS_GEMINI:
         for v_mode in ([True, False] if es_vertex_key else [False, True]):
             try:
@@ -1172,7 +1176,6 @@ def generar_pregunta_por_eje(
     item_especifico: str,
     dificultad: str,
 ) -> dict:
-    # Selección inteligente SIN REPETIR funciones ni competencias
     if modalidad_eje.startswith("🎲"):
         categorias = [
             ("FUNCIÓN ESENCIAL DEL CARGO", perfil.funciones_esenciales),
@@ -1232,7 +1235,7 @@ ESTRUCTURA DEL MANUAL DE FUNCIONES:
 INSTRUCCIONES DE DISEÑO:
 1. Cruza automáticamente el EJE SELECCIONADO ({foco_evaluacion}) con la legislación colombiana específica aplicable a {perfil.entidad} ({norma_sectorial}).
 2. Crea un CASO SITUACIONAL REALISTA E INÉDITO ubicado en la dependencia del cargo ({perfil.cargo} en {perfil.entidad}), donde se presente un dilema técnico, normativo, procedimental o comportamental. No cortes ninguna palabra a la mitad.
-3. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo oficial de prueba CNSC.
+3. Formula un enunciado claro y 4 opciones de actuación (A, B, C, D) con estilo de prueba escrita CNSC.
 4. Solo UNA opción debe ser la respuesta correcta; las otras 3 deben ser distractores plausibles.
 5. En "explicacion", justifica detalladamente por qué la opción correcta es la única válida citando la norma aplicable a la entidad y por qué se descartan las demás.
 6. En "fragmento_soporte", cita la función, competencia o conocimiento del manual que respalda la pregunta.
@@ -1295,7 +1298,7 @@ api_key_input = st.sidebar.text_input(
 ).strip()
 
 api_key_user = api_key_input if api_key_input else clave_respaldo
-st.sidebar.success("⚡ Motor Jurídico CNSC Conectado y Activo.")
+st.sidebar.success("⚡ Motor Jurídico Conectado y Activo.")
 
 with st.sidebar.expander("❓ ¿Cómo funciona o cómo conectar clave propia?"):
     st.markdown(
@@ -1384,7 +1387,7 @@ else:
         nombre_archivo="ninguno",
         entidad="Todos los Concursos de Méritos en Colombia",
         cargo="Cuaderno Inteligente de Preparación OPEC",
-        codigo_grado="CNSC • Nacional y Territorial",
+        codigo_grado="Nacional y Territorial",
         nivel="Nivel Profesional, Técnico y Asistencial",
         proposito="Sube únicamente el PDF del Manual de Funciones de tu cargo en la barra izquierda. El motor identifica tus funciones esenciales y las cruza automáticamente con la legislación aplicable a tu entidad.",
         analizado_por_ia=False,
@@ -1419,7 +1422,7 @@ if modalidad_eje.startswith("🔍"):
 
 dificultad = st.sidebar.select_slider(
     "Nivel de Dificultad",
-    options=["Básica", "Alta", "Muy Alta (Nivel Prueba Oficial CNSC)"],
+    options=["Básica", "Alta", "Muy Alta (Nivel Prueba Situacional)"],
     value="Alta",
 )
 cantidad_simulacro = st.sidebar.selectbox("Preguntas por Simulacro", [5, 10, 15, 20], index=0)
@@ -1445,7 +1448,8 @@ with st.sidebar.expander("🔐 Activar mi Código PRO (Clientes)"):
 
 with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
     pwd_admin = st.text_input("Contraseña de Administrador:", type="password")
-    if pwd_admin and pwd_admin.strip() == obtener_clave_admin_segura():
+    clave_esperada = obtener_clave_admin_segura()
+    if pwd_admin and hmac.compare_digest(pwd_admin.strip(), clave_esperada):
         st.markdown("**Generar licencia única tras confirmar pago en Nequi:**")
         ced_comprador = st.text_input("Cédula del cliente que pagó:")
         plan_dias = st.selectbox(
@@ -1461,7 +1465,7 @@ with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
             st.session_state.serial_salt = secrets.token_hex(2).upper()[:3]
         if ced_comprador:
             folio_unico = hashlib.md5(
-                f"{ced_comprador.strip()}_{st.session_state.serial_salt}".encode()
+                f"{ced_comprador.strip()}_{st.session_state.serial_salt}".encode("utf-8")
             ).hexdigest().upper()[:3]
             token_generado = generar_licencia_temporal(
                 ced_comprador, plan_dias[0], folio=folio_unico
@@ -1470,6 +1474,11 @@ with st.sidebar.expander("🛠️ Generador de Accesos (Solo Admin)"):
                 f"Cédula: {ced_comprador.strip()}\nCódigo PRO: {token_generado}\nVigencia: {plan_dias[0]} días"
             )
             st.caption("Cada código tiene firma única vinculada a la cédula del comprador.")
+
+st.sidebar.markdown("---")
+st.sidebar.caption(
+    "⚖️ Nota legal: Herramienta privada e independiente de estudio basada en documentos públicos OPEC. No tiene vínculo ni afiliación oficial con la CNSC ni con las entidades convocantes."
+)
 
 # ==========================================
 # GUÍA VISUAL DE 3 PASOS + CABECERA EDITORIAL
@@ -1502,8 +1511,8 @@ if not nombres_manuales:
     st.markdown(
         f"""
         <div class="cuaderno-cover">
-            <span class="eje-badge">📘 PLATAFORMA INTEGRAL DE PREPARACIÓN • TODOS LOS CONCURSOS CNSC</span>
-            <div class="cuaderno-serif">Cuaderno Oficial de Méritos IA</div>
+            <span class="eje-badge">📘 PLATAFORMA INTEGRAL DE PREPARACIÓN • CONCURSOS DE MÉRITOS EN COLOMBIA</span>
+            <div class="cuaderno-serif">Cuaderno de Méritos IA</div>
             <p class="cuaderno-sub">
                 <b>Entrena para cualquier convocatoria pública en Colombia</b> (Orden Nacional, Territorial, DIAN, Contralorías, Alcaldías, Gobernaciones, Personerías, SENA, ICBF e INPEC).<br>
                 Solo sube el <b>Manual de Funciones (OPEC)</b> de tu cargo: nuestra plataforma extrae tus funciones esenciales y las cruza automáticamente con la legislación aplicable a tu entidad para evaluarte con casos reales de <b>Juicio Situacional</b>.
@@ -1521,7 +1530,7 @@ else:
     st.markdown(
         f"""
         <div class="hero-box">
-            <div class="hero-tag">🇨🇴 ENTRENADOR OFICIAL MULTICONCURSO • {html.escape(perfil_activo.entidad.upper())}</div>
+            <div class="hero-tag">🇨🇴 ENTRENADOR ESPECIALIZADO MULTICONCURSO • {html.escape(perfil_activo.entidad.upper())}</div>
             <h1 class="hero-title">{html.escape(perfil_activo.cargo)} — {html.escape(perfil_activo.codigo_grado)}</h1>
             <p class="hero-sub"><b>Propósito del Cargo:</b> {html.escape(perfil_activo.proposito)}</p>
         </div>
@@ -1587,7 +1596,7 @@ def renderizar_planes_de_pago():
     st.markdown(
         """
         <div style="text-align:center; margin-bottom:18px;">
-            <h3>🚀 Elige tu Plan de Entrenamiento y Asegura tu Puesto en el Concurso</h3>
+            <h3>🚀 Elige tu Plan de Entrenamiento y Prepárate para el Concurso</h3>
             <p style="color:#475569;">Funciona para <b>todos los concursos de méritos en Colombia</b> (DIAN, Contralorías, Alcaldías, Gobernaciones y Entidades Nacionales). Solo subes el Manual de Funciones de tu OPEC y entrenas sin límites.</p>
         </div>
         """,
